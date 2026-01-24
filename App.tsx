@@ -1,21 +1,10 @@
 
+// Fix: Removed redundant and conflicting Window augmentation for aistudio as it is pre-configured in the environment.
 import React, { useState, useEffect, useRef } from 'react';
 import { Flashcard, VideoSet } from './types';
 import YouTubeInput from './components/YouTubeInput';
 import FlashcardItem from './components/FlashcardItem';
 import { extractVocabFromVideo } from './services/geminiService';
-
-// Fix: Define the AIStudio interface to match global expectations and resolve type mismatch/modifier errors
-interface AIStudio {
-  hasSelectedApiKey: () => Promise<boolean>;
-  openSelectKey: () => Promise<void>;
-}
-
-declare global {
-  interface Window {
-    aistudio: AIStudio;
-  }
-}
 
 const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -29,8 +18,11 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const checkKey = async () => {
+      // @ts-ignore: Assume window.aistudio is pre-configured and valid
       if (window.aistudio) {
+        // @ts-ignore
         const selected = await window.aistudio.hasSelectedApiKey();
+        // 優先檢查是否有透過 aistudio 選取金鑰
         setHasKey(selected || !!process.env.API_KEY);
       }
     };
@@ -51,8 +43,11 @@ const App: React.FC = () => {
   }, [videoSets]);
 
   const handleOpenKeySelector = async () => {
+    // @ts-ignore
     if (window.aistudio) {
+      // @ts-ignore
       await window.aistudio.openSelectKey();
+      // 在觸發選擇後，我們假設使用者會選好金鑰
       setHasKey(true);
     }
   };
@@ -75,9 +70,11 @@ const App: React.FC = () => {
       setView('setDetail');
     } catch (error: any) {
       console.error("Error processing video:", error);
-      alert(error.message || "學習集產生失敗，請稍後再試。");
+      const errMsg = error.message || "";
+      alert(errMsg || "學習集產生失敗，請稍後再試。");
       
-      if (error.message?.includes("API") || error.message?.includes("金鑰")) {
+      // Fix: If the request fails with "Requested entity was not found.", prompt for key selection
+      if (errMsg.includes("Requested entity was not found.") || errMsg.includes("金鑰") || errMsg.includes("API") || errMsg.includes("權限")) {
         handleOpenKeySelector();
       }
     } finally {
@@ -208,6 +205,18 @@ const App: React.FC = () => {
       <main className="max-w-4xl mx-auto">
         {view === 'home' && (
           <div className="space-y-10">
+            {!hasKey && (
+              <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl flex items-start gap-3">
+                <span className="text-2xl">💡</span>
+                <div>
+                  <h4 className="text-amber-800 font-bold text-sm mb-1">提示：尚未連結 API 金鑰</h4>
+                  <p className="text-amber-700 text-xs leading-relaxed">
+                    請點擊右上角「設定 API Key」並選擇金鑰。注意：此工具需要使用<b>已啟用計費 (Paid Billing)</b> 的專案金鑰，才能啟用 AI 影片分析功能。更多資訊請參考 <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="underline font-bold">帳單說明</a>。
+                  </p>
+                </div>
+              </div>
+            )}
+            
             <YouTubeInput onProcess={handleProcessVideo} isLoading={isLoading} />
             
             <div className="space-y-4">
