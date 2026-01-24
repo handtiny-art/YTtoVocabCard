@@ -1,0 +1,8 @@
+{
+  "name": "Youtube Vocab Master",
+  "description": "Transform any YouTube video into interactive English flashcards. Extract high-level vocabulary, translate it, and master it with an intuitive swiping interface.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
