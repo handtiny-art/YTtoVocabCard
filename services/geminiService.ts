@@ -3,19 +3,15 @@ import { GoogleGenAI } from "@google/genai";
 import { Flashcard, GroundingSource } from "../types";
 
 export const extractVocabFromVideo = async (url: string): Promise<{ transcript: string, cards: Flashcard[], detectedTitle: string, sources: GroundingSource[] }> => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    throw new Error("找不到 API_KEY。請確保 Vercel 環境變數已設定且已重新部署。");
-  }
-
-  const ai = new GoogleGenAI({ apiKey });
+  // Fix: Always initialize GoogleGenAI directly with process.env.API_KEY right before making a call
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const prompt = `
     I need you to analyze this specific YouTube video: ${url}
     
     STEP 1: Use Google Search to find the EXACT content, transcript, or detailed summary of this video.
     STEP 2: Based on the video content, identify 10-12 advanced English vocabulary words used in it.
-    STEP 3: Format your ENTIRE response as a valid JSON object ONLY. Do not add markdown backticks like \`\`\`json.
+    STEP 3: Format your ENTIRE response as a valid JSON object ONLY. Do not add markdown backticks.
     
     JSON Structure:
     {
@@ -38,22 +34,18 @@ export const extractVocabFromVideo = async (url: string): Promise<{ transcript: 
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }]
-        // We avoid responseMimeType: "application/json" here because it often conflicts with grounding tools
       }
     });
 
     const responseText = response.text || "";
-    
-    // Attempt to find JSON in the response (sometimes models wrap it in markdown)
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    
     if (!jsonMatch) {
-      console.error("Raw response:", responseText);
-      throw new Error("AI 回傳格式不正確，無法解析單字資訊。");
+      throw new Error("AI 回傳內容無法解析為單字卡，請再試一次。");
     }
 
     const result = JSON.parse(jsonMatch[0]);
     
-    // Extract Grounding Sources as required by rules
     const sources: GroundingSource[] = [];
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (chunks) {
@@ -83,7 +75,13 @@ export const extractVocabFromVideo = async (url: string): Promise<{ transcript: 
       sources
     };
   } catch (error: any) {
-    console.error("Gemini Service Error:", error);
+    console.error("Gemini Service Error Detail:", error);
+    
+    // 如果是找不到實體或 404，通常代表 API Key 沒過或模型權限問題
+    if (error.message?.includes("not found") || error.message?.includes("404") || error.message?.includes("API_KEY")) {
+      throw new Error("API 金鑰無效或未授權。請點擊右上角「設定金鑰」並選擇一個已啟用計費的專案金鑰。");
+    }
+    
     throw error;
   }
 };

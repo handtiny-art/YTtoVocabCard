@@ -5,6 +5,18 @@ import YouTubeInput from './components/YouTubeInput';
 import FlashcardItem from './components/FlashcardItem';
 import { extractVocabFromVideo } from './services/geminiService';
 
+// Fix: Define the AIStudio interface to match global expectations and resolve type mismatch/modifier errors
+interface AIStudio {
+  hasSelectedApiKey: () => Promise<boolean>;
+  openSelectKey: () => Promise<void>;
+}
+
+declare global {
+  interface Window {
+    aistudio: AIStudio;
+  }
+}
+
 const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [videoSets, setVideoSets] = useState<VideoSet[]>([]);
@@ -12,9 +24,18 @@ const App: React.FC = () => {
   const [activeCards, setActiveCards] = useState<Flashcard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [view, setView] = useState<'home' | 'setDetail' | 'learning' | 'summary'>('home');
+  const [hasKey, setHasKey] = useState<boolean>(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    const checkKey = async () => {
+      if (window.aistudio) {
+        const selected = await window.aistudio.hasSelectedApiKey();
+        setHasKey(selected || !!process.env.API_KEY);
+      }
+    };
+    checkKey();
+    
     const savedSets = localStorage.getItem('vocab_master_sets');
     if (savedSets) {
       try {
@@ -28,6 +49,13 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('vocab_master_sets', JSON.stringify(videoSets));
   }, [videoSets]);
+
+  const handleOpenKeySelector = async () => {
+    if (window.aistudio) {
+      await window.aistudio.openSelectKey();
+      setHasKey(true);
+    }
+  };
 
   const handleProcessVideo = async (url: string) => {
     setIsLoading(true);
@@ -47,7 +75,11 @@ const App: React.FC = () => {
       setView('setDetail');
     } catch (error: any) {
       console.error("Error processing video:", error);
-      alert(`學習集產生失敗: ${error.message || "未知錯誤"}\n\n提示：請確保 Vercel 的 API_KEY 已設定並完成重新部署。`);
+      alert(error.message || "學習集產生失敗，請稍後再試。");
+      
+      if (error.message?.includes("API") || error.message?.includes("金鑰")) {
+        handleOpenKeySelector();
+      }
     } finally {
       setIsLoading(false);
     }
@@ -149,17 +181,28 @@ const App: React.FC = () => {
           </h1>
           <div className="flex items-center gap-2">
             <p className="text-slate-500 text-sm">影片單字圖書館</p>
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-black bg-green-100 text-green-600 uppercase">
-              <span className="w-1 h-1 bg-green-500 rounded-full mr-1"></span>
-              Cloud Sync Off
+            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-black uppercase ${hasKey ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+              <span className={`w-1 h-1 rounded-full mr-1 ${hasKey ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`}></span>
+              {hasKey ? 'API Ready' : 'Key Missing'}
             </span>
           </div>
         </div>
-        {view !== 'home' && (
-          <button onClick={() => setView('home')} className="px-4 py-2 bg-white text-slate-600 rounded-xl text-sm font-bold shadow-sm border border-slate-200">
-            返回主頁
-          </button>
-        )}
+        
+        <div className="flex gap-2">
+          {!hasKey && (
+            <button 
+              onClick={handleOpenKeySelector}
+              className="px-4 py-2 bg-amber-500 text-white rounded-xl text-xs font-black shadow-sm hover:bg-amber-600 transition-colors uppercase tracking-wider"
+            >
+              設定 API Key
+            </button>
+          )}
+          {view !== 'home' && (
+            <button onClick={() => setView('home')} className="px-4 py-2 bg-white text-slate-600 rounded-xl text-sm font-bold shadow-sm border border-slate-200">
+              返回主頁
+            </button>
+          )}
+        </div>
       </header>
 
       <main className="max-w-4xl mx-auto">
