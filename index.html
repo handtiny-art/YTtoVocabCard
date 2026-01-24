@@ -11,20 +11,19 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+  <script>
+    // 防止在瀏覽器環境中因為找不到 process.env 而崩潰
+    window.process = window.process || { env: {} };
+  </script>
   <style>
     body { 
       font-family: 'Inter', sans-serif; 
-      /* 防止手機上長按選取文字影響操作 */
       -webkit-user-select: none;
       -webkit-tap-highlight-color: transparent;
     }
     .card-swipe-exit-right { transform: translateX(200%) rotate(20deg); opacity: 0; transition: all 0.5s ease; }
     .card-swipe-exit-left { transform: translateX(-200%) rotate(-20deg); opacity: 0; transition: all 0.5s ease; }
-    
-    /* 自定義捲軸隱藏 */
-    ::-webkit-scrollbar {
-      display: none;
-    }
+    ::-webkit-scrollbar { display: none; }
   </style>
 <script type="importmap">
 {
@@ -39,5 +38,7 @@
 </head>
 <body class="bg-slate-50 text-slate-900 overflow-x-hidden">
   <div id="root"></div>
+  <!-- 必須補上這個入口點，程式才會開始跑 -->
+  <script type="module" src="./index.tsx"></script>
 </body>
 </html>

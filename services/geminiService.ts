@@ -2,10 +2,10 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Flashcard } from "../types";
 
-// 初始化時直接使用 process.env.API_KEY，系統會自動注入
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 export const extractVocabFromVideo = async (url: string): Promise<{ transcript: string, cards: Flashcard[], detectedTitle: string }> => {
+  // 在呼叫時才初始化，避免模組載入時因為 process.env 未定義而報錯
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
   const prompt = `
     TASK: Analyze the YouTube video at this EXACT URL: ${url}
 
@@ -28,50 +28,58 @@ export const extractVocabFromVideo = async (url: string): Promise<{ transcript: 
     - No hallucinations. Accuracy relative to the provided URL is the most important metric.
   `;
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview', 
-    contents: prompt,
-    config: {
-      tools: [{ googleSearch: {} }], 
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          detectedTitle: { type: Type.STRING },
-          summary: { type: Type.STRING },
-          vocabulary: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                word: { type: Type.STRING },
-                partOfSpeech: { type: Type.STRING },
-                translation: { type: Type.STRING },
-                example: { type: Type.STRING }
-              },
-              required: ["word", "partOfSpeech", "translation", "example"]
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-pro-preview', 
+      contents: prompt,
+      config: {
+        tools: [{ googleSearch: {} }], 
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            detectedTitle: { type: Type.STRING },
+            summary: { type: Type.STRING },
+            vocabulary: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  word: { type: Type.STRING },
+                  partOfSpeech: { type: Type.STRING },
+                  translation: { type: Type.STRING },
+                  example: { type: Type.STRING }
+                },
+                required: ["word", "partOfSpeech", "translation", "example"]
+              }
             }
-          }
-        },
-        required: ["detectedTitle", "summary", "vocabulary"]
+          },
+          required: ["detectedTitle", "summary", "vocabulary"]
+        }
       }
+    });
+
+    const result = JSON.parse(response.text);
+    
+    const cards: Flashcard[] = result.vocabulary.map((v: any, index: number) => ({
+      id: `card-${Date.now()}-${index}`,
+      word: v.word,
+      partOfSpeech: v.partOfSpeech,
+      translation: v.translation,
+      example: v.example,
+      status: 'new'
+    }));
+
+    return {
+      transcript: result.summary,
+      detectedTitle: result.detectedTitle,
+      cards
+    };
+  } catch (error: any) {
+    console.error("Gemini API Error:", error);
+    if (error.message?.includes("API_KEY") || !process.env.API_KEY) {
+      throw new Error("請檢查 Vercel 的 Environment Variables 是否已正確設定 API_KEY。");
     }
-  });
-
-  const result = JSON.parse(response.text);
-  
-  const cards: Flashcard[] = result.vocabulary.map((v: any, index: number) => ({
-    id: `card-${Date.now()}-${index}`,
-    word: v.word,
-    partOfSpeech: v.partOfSpeech,
-    translation: v.translation,
-    example: v.example,
-    status: 'new'
-  }));
-
-  return {
-    transcript: result.summary,
-    detectedTitle: result.detectedTitle,
-    cards
-  };
+    throw error;
+  }
 };
