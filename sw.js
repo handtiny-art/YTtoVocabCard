@@ -1,16 +1,19 @@
 
-const CACHE_NAME = 'vocab-master-v3';
+const CACHE_NAME = 'vocab-master-v4';
+
+// 這裡我們快取所有可能的進入路徑
 const ASSETS = [
   './',
   'index.html',
+  'index.tsx',
   'manifest.json',
   'https://cdn-icons-png.flaticon.com/512/3898/3898082.png'
 ];
 
-// 安裝時快取核心資源
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
+      // 分開 add 以確保即便 index.tsx 抓取失敗，其他核心檔案也能存入
       return Promise.allSettled(
         ASSETS.map(url => cache.add(url))
       );
@@ -19,7 +22,6 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-// 激活時清理舊快取
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -28,40 +30,28 @@ self.addEventListener('activate', (event) => {
       );
     })
   );
-  self.clients.claim();
+  return self.clients.claim();
 });
 
-// 攔截請求
 self.addEventListener('fetch', (event) => {
-  // 只處理 GET 請求
   if (event.request.method !== 'GET') return;
 
-  const url = new URL(event.request.url);
-
-  // 1. 導航請求 (開啟頁面或重新整理)
+  // 核心邏輯：如果是導航請求 (開啟 App)，永遠優先回傳 index.html
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
-        .then((response) => {
-          // 如果網路回傳 404，則改用快取的 index.html
-          if (response.status === 404) {
-            return caches.match('index.html') || response;
-          }
-          return response;
-        })
         .catch(() => {
-          // 網路斷線時，嘗試回傳快取的目錄或 index.html
-          return caches.match('./') || caches.match('index.html');
+          // 如果網路失敗，從快取找 index.html 或根路徑
+          return caches.match('index.html') || caches.match('./');
         })
     );
     return;
   }
 
-  // 2. 一般資源請求 (JS, CSS, Images)
+  // 其他資源 (JS, CSS, 圖片)
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) return cachedResponse;
-      return fetch(event.request);
+    caches.match(event.request).then((response) => {
+      return response || fetch(event.request);
     })
   );
 });
