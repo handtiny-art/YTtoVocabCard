@@ -1,10 +1,8 @@
 
-// Fix: Use responseSchema and responseMimeType for structured JSON output as recommended in the guidelines.
 import { GoogleGenAI, Type } from "@google/genai";
 import { Flashcard, GroundingSource } from "../types";
 
 export const extractVocabFromVideo = async (url: string): Promise<{ transcript: string, cards: Flashcard[], detectedTitle: string, sources: GroundingSource[] }> => {
-  // 每次呼叫時才初始化，確保能抓到從 aistudio 對話框注入的最新 process.env.API_KEY
   const apiKey = process.env.API_KEY;
   
   if (!apiKey) {
@@ -13,12 +11,22 @@ export const extractVocabFromVideo = async (url: string): Promise<{ transcript: 
 
   const ai = new GoogleGenAI({ apiKey });
   
+  // 優化後的 Prompt，針對特定影片進行深度搜尋
   const prompt = `
-    I need you to analyze this specific YouTube video: ${url}
+    I need you to perform a deep analysis of this YouTube video: ${url}
     
-    STEP 1: Use Google Search to find the EXACT content, transcript, or detailed summary of this video.
-    STEP 2: Based on the video content, identify 10-12 advanced English vocabulary words used in it.
-    STEP 3: Return the results in a structured JSON format.
+    SEARCH STRATEGY:
+    1. Identify the YouTube Video ID from the URL.
+    2. Search for the exact video title and channel name associated with this URL.
+    3. Search for the video transcript, script, or detailed tech reviews (especially if it's from creators like MKBHD, MrWhoseTheBoss, etc.) to get the ACTUAL spoken content.
+    4. Do not report "Video Unavailable". If the direct page is restricted, use search results from tech blogs, subtitles databases, or news articles that describe this specific video's content to fulfill this request.
+    
+    OUTPUT REQUIREMENTS:
+    - detectedTitle: The official full title and the creator's name.
+    - summary: A 150-word comprehensive summary of the points made in the video.
+    - vocabulary: 10-12 advanced English words or tech idioms used in the expert discussion.
+    
+    Provide everything in a structured JSON format.
   `;
 
   try {
@@ -27,17 +35,19 @@ export const extractVocabFromVideo = async (url: string): Promise<{ transcript: 
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
+        // 啟用 Thinking Budget 讓模型在輸出前進行深思熟慮與資料比對
+        thinkingConfig: { thinkingBudget: 32768 },
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
             detectedTitle: {
               type: Type.STRING,
-              description: "The full title of the analyzed video."
+              description: "Official title and creator name found via search."
             },
             summary: {
               type: Type.STRING,
-              description: "A detailed 150-word summary of the video content in English."
+              description: "Accurate summary of the video content."
             },
             vocabulary: {
               type: Type.ARRAY,
@@ -45,9 +55,9 @@ export const extractVocabFromVideo = async (url: string): Promise<{ transcript: 
                 type: Type.OBJECT,
                 properties: {
                   word: { type: Type.STRING },
-                  partOfSpeech: { type: Type.STRING, description: "n, v, adj, or adv." },
-                  translation: { type: Type.STRING, description: "Traditional Chinese translation." },
-                  example: { type: Type.STRING, description: "The sentence from the video containing this word." }
+                  partOfSpeech: { type: Type.STRING },
+                  translation: { type: Type.STRING, description: "Traditional Chinese." },
+                  example: { type: Type.STRING, description: "How this word relates to the specific video context." }
                 },
                 required: ["word", "partOfSpeech", "translation", "example"]
               }
@@ -59,31 +69,27 @@ export const extractVocabFromVideo = async (url: string): Promise<{ transcript: 
     });
 
     const responseText = response.text || "";
-    if (!responseText) {
-      throw new Error("AI 雖然有回覆，但無法獲取內容。");
+    if (!responseText || responseText.includes("unavailable") || responseText.length < 50) {
+      throw new Error("AI 無法獲取該影片的具體內容。請確保網址正確，或嘗試換一支影片。");
     }
 
     let result;
     try {
-      // Even with responseSchema, search grounding might sometimes include citations. 
-      // We attempt to parse the trimmed text directly first.
       result = JSON.parse(responseText.trim());
     } catch (e) {
-      // Fallback: regex for JSON ifcitations were appended outside the object
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error("無法解析單字內容。請確保該影片有公開資訊且金鑰權限正確。");
-      }
+      if (!jsonMatch) throw new Error("解析內容失敗。");
       result = JSON.parse(jsonMatch[0]);
     }
     
+    // 提取來源 URL，用於展示給使用者看 AI 是參考了哪些資料
     const sources: GroundingSource[] = [];
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (chunks) {
       chunks.forEach((chunk: any) => {
         if (chunk.web && chunk.web.uri) {
           sources.push({
-            title: chunk.web.title || "參考來源",
+            title: chunk.web.title || "驗證來源",
             url: chunk.web.uri
           });
         }
@@ -106,15 +112,11 @@ export const extractVocabFromVideo = async (url: string): Promise<{ transcript: 
       sources
     };
   } catch (error: any) {
-    console.error("Gemini Service Error Detail:", error);
-    
+    console.error("Gemini Critical Failure:", error);
     const errMsg = error.message || "";
-    
-    // 針對 Gemini 3 與 Google Search 常見的金鑰/權限錯誤進行詳細提示
-    if (errMsg.includes("Requested entity was not found.") || errMsg.includes("not found") || errMsg.includes("404") || errMsg.includes("403") || errMsg.includes("permission")) {
-      throw new Error("發生權限錯誤。請確認：\n1. 您已點擊右上角「設定 API Key」重新選取金鑰。\n2. 您所選的金鑰必須來自一個「已啟用計費 (Paid)」的 Google Cloud 專案。\n3. 免費版金鑰可能不支援 Google Search 搜尋功能。\n(Original error: Requested entity was not found.)");
+    if (errMsg.includes("Requested entity was not found")) {
+      throw new Error("API 金鑰權限不足。請確認點擊右上角「設定 API Key」並選擇一個「已啟用計費 (Paid)」的專案金鑰。");
     }
-    
     throw new Error(`分析失敗: ${errMsg}`);
   }
 };
