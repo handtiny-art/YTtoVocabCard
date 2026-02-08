@@ -1,7 +1,7 @@
 
 {
   "short_name": "VocabMaster",
-  "name": "VocabMaster - YouTube Flashcards",
+  "name": "VocabMaster - YouTube 單字大師",
   "icons": [
     {
       "src": "https://cdn-icons-png.flaticon.com/512/3898/3898082.png",
@@ -10,7 +10,7 @@
       "purpose": "any maskable"
     }
   ],
-  "start_url": "./index.html",
+  "start_url": "index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",

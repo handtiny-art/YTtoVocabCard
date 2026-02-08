@@ -1,24 +1,25 @@
 
-const CACHE_NAME = 'vocab-master-v1';
+const CACHE_NAME = 'vocab-master-v2';
 const ASSETS = [
-  '/',
-  '/index.html',
-  '/index.tsx',
-  '/manifest.json',
+  'index.html',
+  'manifest.json',
   'https://cdn-icons-png.flaticon.com/512/3898/3898082.png'
 ];
 
-// 安裝 Service Worker 並快取資源
+// 安裝時快取核心資源
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS);
+      // 使用個別 add 避免單一檔案失敗導致整個 SW 安裝失敗
+      return Promise.allSettled(
+        ASSETS.map(url => cache.add(url))
+      );
     })
   );
   self.skipWaiting();
 });
 
-// 激活 Service Worker 並清理舊快取
+// 激活時清理舊快取
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -29,16 +30,22 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// 攔截請求，優先從快取中讀取以防止 404
+// 攔截請求
 self.addEventListener('fetch', (event) => {
+  // 對於導航請求（開啟頁面），優先嘗試網路，失敗則回傳快取的 index.html
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        return caches.match('index.html');
+      })
+    );
+    return;
+  }
+
+  // 其他資源（圖片、腳本等）使用快取優先策略
   event.respondWith(
     caches.match(event.request).then((response) => {
-      return response || fetch(event.request).catch(() => {
-        // 如果是導航請求（如重新整理）且找不到資源，則導回 index.html
-        if (event.request.mode === 'navigate') {
-          return caches.match('/index.html');
-        }
-      });
+      return response || fetch(event.request);
     })
   );
 });
