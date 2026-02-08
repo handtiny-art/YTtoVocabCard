@@ -1,6 +1,7 @@
 
-const CACHE_NAME = 'vocab-master-v2';
+const CACHE_NAME = 'vocab-master-v3';
 const ASSETS = [
+  './',
   'index.html',
   'manifest.json',
   'https://cdn-icons-png.flaticon.com/512/3898/3898082.png'
@@ -10,7 +11,6 @@ const ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // 使用個別 add 避免單一檔案失敗導致整個 SW 安裝失敗
       return Promise.allSettled(
         ASSETS.map(url => cache.add(url))
       );
@@ -28,24 +28,40 @@ self.addEventListener('activate', (event) => {
       );
     })
   );
+  self.clients.claim();
 });
 
 // 攔截請求
 self.addEventListener('fetch', (event) => {
-  // 對於導航請求（開啟頁面），優先嘗試網路，失敗則回傳快取的 index.html
+  // 只處理 GET 請求
+  if (event.request.method !== 'GET') return;
+
+  const url = new URL(event.request.url);
+
+  // 1. 導航請求 (開啟頁面或重新整理)
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).catch(() => {
-        return caches.match('index.html');
-      })
+      fetch(event.request)
+        .then((response) => {
+          // 如果網路回傳 404，則改用快取的 index.html
+          if (response.status === 404) {
+            return caches.match('index.html') || response;
+          }
+          return response;
+        })
+        .catch(() => {
+          // 網路斷線時，嘗試回傳快取的目錄或 index.html
+          return caches.match('./') || caches.match('index.html');
+        })
     );
     return;
   }
 
-  // 其他資源（圖片、腳本等）使用快取優先策略
+  // 2. 一般資源請求 (JS, CSS, Images)
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request);
+    caches.match(event.request).then((cachedResponse) => {
+      if (cachedResponse) return cachedResponse;
+      return fetch(event.request);
     })
   );
 });
