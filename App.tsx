@@ -1,5 +1,4 @@
 
-// Fix: Removed redundant and conflicting Window augmentation for aistudio as it is pre-configured in the environment.
 import React, { useState, useEffect, useRef } from 'react';
 import { Flashcard, VideoSet } from './types';
 import YouTubeInput from './components/YouTubeInput';
@@ -13,18 +12,22 @@ const App: React.FC = () => {
   const [activeCards, setActiveCards] = useState<Flashcard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [view, setView] = useState<'home' | 'setDetail' | 'learning' | 'summary'>('home');
-  const [hasKey, setHasKey] = useState<boolean>(true);
+  const [hasKey, setHasKey] = useState<boolean>(true); // Default true to prevent flicker
+  const [isCheckingKey, setIsCheckingKey] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const checkKey = async () => {
-      // @ts-ignore: Assume window.aistudio is pre-configured and valid
-      if (window.aistudio) {
+      // @ts-ignore
+      if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
         // @ts-ignore
         const selected = await window.aistudio.hasSelectedApiKey();
-        // 優先檢查是否有透過 aistudio 選取金鑰
-        setHasKey(selected || !!process.env.API_KEY);
+        setHasKey(selected);
+      } else {
+        // Fallback for environments without aistudio bridge
+        setHasKey(!!process.env.API_KEY);
       }
+      setIsCheckingKey(false);
     };
     checkKey();
     
@@ -44,11 +47,13 @@ const App: React.FC = () => {
 
   const handleOpenKeySelector = async () => {
     // @ts-ignore
-    if (window.aistudio) {
+    if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
       // @ts-ignore
       await window.aistudio.openSelectKey();
-      // 在觸發選擇後，我們假設使用者會選好金鑰
+      // Assume selection successful and proceed
       setHasKey(true);
+    } else {
+      alert("此環境不支援金鑰選取對話框。請確認您在正確的環境中運行。");
     }
   };
 
@@ -71,11 +76,12 @@ const App: React.FC = () => {
     } catch (error: any) {
       console.error("Error processing video:", error);
       const errMsg = error.message || "";
-      alert(errMsg || "學習集產生失敗，請稍後再試。");
       
-      // Fix: If the request fails with "Requested entity was not found.", prompt for key selection
-      if (errMsg.includes("Requested entity was not found.") || errMsg.includes("金鑰") || errMsg.includes("API") || errMsg.includes("權限")) {
-        handleOpenKeySelector();
+      if (errMsg.includes("Requested entity was not found") || errMsg.includes("權限") || errMsg.includes("API")) {
+        alert("金鑰無效或權限不足（請確認金鑰來自已啟用計費的專案）。將為您重新開啟金鑰選擇器。");
+        setHasKey(false);
+      } else {
+        alert(errMsg || "學習集產生失敗，請稍後再試。");
       }
     } finally {
       setIsLoading(false);
@@ -169,6 +175,32 @@ const App: React.FC = () => {
 
   const currentSet = videoSets.find(s => s.id === currentSetId);
 
+  // Mandatory Setup View
+  if (!hasKey && !isCheckingKey) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white rounded-[2.5rem] p-10 shadow-2xl text-center">
+          <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-8 transform rotate-12">
+            🔑
+          </div>
+          <h1 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">啟動 VocabMaster</h1>
+          <p className="text-slate-500 mb-8 leading-relaxed font-medium">
+            為了精確分析 YouTube 影片並提取單字，我們需要連結您的 <b>Google AI Studio API Key</b>。
+            <br/><br/>
+            請確保選取的是一個來自 <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="text-indigo-600 underline font-bold">已啟用計費 (Paid)</a> 專案的金鑰。
+          </p>
+          <button 
+            onClick={handleOpenKeySelector}
+            className="w-full py-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-lg shadow-xl shadow-indigo-200 transition-all active:scale-95 mb-4"
+          >
+            立即連結 API 金鑰
+          </button>
+          <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Powered by Gemini 3 Pro & Google Search</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 pb-32 px-4 pt-8 md:pt-12">
       <header className="max-w-4xl mx-auto mb-8 flex items-center justify-between">
@@ -178,22 +210,24 @@ const App: React.FC = () => {
           </h1>
           <div className="flex items-center gap-2">
             <p className="text-slate-500 text-sm">影片單字圖書館</p>
-            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-black uppercase ${hasKey ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-              <span className={`w-1 h-1 rounded-full mr-1 ${hasKey ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`}></span>
-              {hasKey ? 'API Ready' : 'Key Missing'}
-            </span>
+            <div 
+              onClick={handleOpenKeySelector}
+              className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-50 text-green-600 text-[10px] font-black uppercase cursor-pointer hover:bg-green-100 transition-colors"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+              API Connected
+            </div>
           </div>
         </div>
         
         <div className="flex gap-2">
-          {!hasKey && (
-            <button 
-              onClick={handleOpenKeySelector}
-              className="px-4 py-2 bg-amber-500 text-white rounded-xl text-xs font-black shadow-sm hover:bg-amber-600 transition-colors uppercase tracking-wider"
-            >
-              設定 API Key
-            </button>
-          )}
+          <button 
+            onClick={handleOpenKeySelector}
+            className="p-2 bg-white text-slate-400 rounded-xl hover:text-indigo-600 border border-slate-100 transition-colors"
+            title="更換金鑰"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+          </button>
           {view !== 'home' && (
             <button onClick={() => setView('home')} className="px-4 py-2 bg-white text-slate-600 rounded-xl text-sm font-bold shadow-sm border border-slate-200">
               返回主頁
@@ -205,18 +239,6 @@ const App: React.FC = () => {
       <main className="max-w-4xl mx-auto">
         {view === 'home' && (
           <div className="space-y-10">
-            {!hasKey && (
-              <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl flex items-start gap-3">
-                <span className="text-2xl">💡</span>
-                <div>
-                  <h4 className="text-amber-800 font-bold text-sm mb-1">提示：尚未連結 API 金鑰</h4>
-                  <p className="text-amber-700 text-xs leading-relaxed">
-                    請點擊右上角「設定 API Key」並選擇金鑰。注意：此工具需要使用<b>已啟用計費 (Paid Billing)</b> 的專案金鑰，才能啟用 AI 影片分析功能。更多資訊請參考 <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="underline font-bold">帳單說明</a>。
-                  </p>
-                </div>
-              </div>
-            )}
-            
             <YouTubeInput onProcess={handleProcessVideo} isLoading={isLoading} />
             
             <div className="space-y-4">
