@@ -7,19 +7,34 @@
   <title>VocabMaster - YouTube Flashcards</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#4f46e5">
+  
+  <!-- iOS 專用配置 -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="VocabMaster">
+  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3898/3898082.png">
+  
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
   <script>
     // 防止在瀏覽器環境中因為找不到 process.env 而崩潰
     window.process = window.process || { env: {} };
+    
+    // 註冊 Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('SW Registered!', reg))
+          .catch(err => console.log('SW Registration failed:', err));
+      });
+    }
   </script>
   <style>
     body { 
       font-family: 'Inter', sans-serif; 
       -webkit-user-select: none;
       -webkit-tap-highlight-color: transparent;
+      overscroll-behavior-y: contain; /* 防止手機瀏覽器下拉重新整理 */
     }
     .card-swipe-exit-right { transform: translateX(200%) rotate(20deg); opacity: 0; transition: all 0.5s ease; }
     .card-swipe-exit-left { transform: translateX(-200%) rotate(-20deg); opacity: 0; transition: all 0.5s ease; }
@@ -38,7 +53,6 @@
 </head>
 <body class="bg-slate-50 text-slate-900 overflow-x-hidden">
   <div id="root"></div>
-  <!-- 必須補上這個入口點，程式才會開始跑 -->
   <script type="module" src="./index.tsx"></script>
 </body>
 </html>
