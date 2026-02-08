@@ -148,7 +148,7 @@ const App: React.FC = () => {
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-white rounded-[2.5rem] p-10 shadow-2xl animate-in zoom-in duration-300 text-center">
           <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-6 transform rotate-12">🔑</div>
-          <h1 className="text-3xl font-black text-slate-900 mb-2 tracking-tight">需要 API Key</h1>
+          <h1 className="text-3xl font-black text-slate-900 mb-2 tracking-tight">請輸入 API 金鑰</h1>
           <p className="text-slate-500 text-sm mb-8">請貼上您的 Google Gemini API Key 以啟動 AI 分析功能</p>
           <form onSubmit={handleSaveKey} className="space-y-4">
             <input 

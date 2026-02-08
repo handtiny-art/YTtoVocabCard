@@ -3,11 +3,11 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Flashcard, GroundingSource } from "../types";
 
 export const extractVocabFromVideo = async (url: string): Promise<{ transcript: string, cards: Flashcard[], detectedTitle: string, sources: GroundingSource[] }> => {
-  // 優先從全域環境變數獲取最新值，避免被編譯器靜態替換
-  const apiKey = (window as any).process?.env?.API_KEY || process.env.API_KEY;
+  // 優先讀取 App.tsx 注入到全域的金鑰，這才是使用者在 UI 輸入的那把
+  const apiKey = (window as any).process?.env?.API_KEY;
   
-  if (!apiKey || apiKey === "undefined" || apiKey === "null" || apiKey.length < 10) {
-    throw new Error("偵測不到有效的 API 金鑰。請點擊右上角「🔑 設定金鑰」並貼上正確的金鑰。");
+  if (!apiKey || apiKey === "undefined" || apiKey.length < 10) {
+    throw new Error("偵測不到有效的 API 金鑰。請點擊右上角「🔑 設定」並貼上正確的金鑰。");
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -17,13 +17,12 @@ export const extractVocabFromVideo = async (url: string): Promise<{ transcript: 
     
     SEARCH STRATEGY:
     1. Identify the YouTube Video ID from the URL.
-    2. Search for the exact video title and channel name.
-    3. Get the ACTUAL spoken content or detailed summaries.
+    2. Search for the exact video title and channel name to understand the context.
     
     OUTPUT REQUIREMENTS:
-    - detectedTitle: Official title and creator name.
-    - summary: 150-word summary of the video.
-    - vocabulary: 10-12 advanced English words or tech idioms used.
+    - detectedTitle: Official title of the video.
+    - summary: A cohesive summary (around 150 words) in Traditional Chinese.
+    - vocabulary: 10-12 practical or advanced English words/idioms found in the video.
     
     Provide everything in a structured JSON format.
   `;
