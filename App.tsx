@@ -13,7 +13,6 @@ const App: React.FC = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [view, setView] = useState<'home' | 'setDetail' | 'learning' | 'summary'>('home');
   
-  // API Key 狀態管理
   const [showKeyConfig, setShowKeyConfig] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [currentKey, setCurrentKey] = useState<string>('');
@@ -21,47 +20,48 @@ const App: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 初始化：檢查是否有既有的金鑰
   useEffect(() => {
-    const savedKey = localStorage.getItem('VOCAB_MASTER_API_KEY') || process.env.API_KEY || '';
-    if (savedKey) {
-      setCurrentKey(savedKey);
-      // @ts-ignore
-      window.process.env.API_KEY = savedKey;
+    // 檢查 localStorage 或是 process.env (Vercel 建置時注入)
+    const savedKey = localStorage.getItem('VOCAB_MASTER_API_KEY');
+    const envKey = process.env.API_KEY;
+    
+    // 如果 envKey 是字串 "undefined" 代表沒設好，忽略它
+    const validEnvKey = (envKey && envKey !== "undefined" && envKey !== "null") ? envKey : "";
+    const finalKey = savedKey || validEnvKey;
+
+    if (finalKey) {
+      setCurrentKey(finalKey);
+      setApiKeyIntoGlobal(finalKey);
     }
     
     const savedSets = localStorage.getItem('vocab_master_sets');
     if (savedSets) {
       try {
         setVideoSets(JSON.parse(savedSets));
-      } catch (e) {
-        console.error("Failed to parse saved data", e);
-      }
+      } catch (e) { console.error(e); }
     }
     setIsInitializing(false);
   }, []);
 
-  // 當金鑰變更時同步到全域
-  useEffect(() => {
-    if (currentKey) {
-      // @ts-ignore
-      window.process.env.API_KEY = currentKey;
-      localStorage.setItem('VOCAB_MASTER_API_KEY', currentKey);
-    }
-  }, [currentKey]);
-
-  useEffect(() => {
-    localStorage.setItem('vocab_master_sets', JSON.stringify(videoSets));
-  }, [videoSets]);
+  const setApiKeyIntoGlobal = (key: string) => {
+    if (!key) return;
+    // 強制注入到 window 全域，確保服務讀得到
+    if (!(window as any).process) (window as any).process = { env: {} };
+    if (!(window as any).process.env) (window as any).process.env = {};
+    (window as any).process.env.API_KEY = key;
+  };
 
   const handleSaveKey = (e: React.FormEvent) => {
     e.preventDefault();
-    if (apiKeyInput.trim().length > 10) {
-      setCurrentKey(apiKeyInput.trim());
+    const cleanKey = apiKeyInput.trim();
+    if (cleanKey.length > 10) {
+      setCurrentKey(cleanKey);
+      localStorage.setItem('VOCAB_MASTER_API_KEY', cleanKey);
+      setApiKeyIntoGlobal(cleanKey);
       setShowKeyConfig(false);
       setApiKeyInput('');
     } else {
-      alert("請輸入有效的 API Key (通常長度較長)");
+      alert("請貼上正確且完整的 API Key");
     }
   };
 
@@ -70,6 +70,9 @@ const App: React.FC = () => {
       setShowKeyConfig(true);
       return;
     }
+    // 雙重保險：呼叫前再次確認注入
+    setApiKeyIntoGlobal(currentKey);
+    
     setIsLoading(true);
     try {
       const { transcript, cards, detectedTitle, sources } = await extractVocabFromVideo(url);
@@ -86,8 +89,7 @@ const App: React.FC = () => {
       setCurrentSetId(newSet.id);
       setView('setDetail');
     } catch (error: any) {
-      console.error("Error:", error);
-      alert(error.message || "分析失敗");
+      alert(error.message);
     } finally {
       setIsLoading(false);
     }
@@ -98,9 +100,7 @@ const App: React.FC = () => {
       if (set.id === setId) {
         return {
           ...set,
-          cards: set.cards.map(card => 
-            card.id === cardId ? { ...card, status } : card
-          )
+          cards: set.cards.map(card => card.id === cardId ? { ...card, status } : card)
         };
       }
       return set;
@@ -111,9 +111,7 @@ const App: React.FC = () => {
     if (!currentSetId) return;
     const currentCard = activeCards[currentIndex];
     if (!currentCard) return;
-
     updateCardStatus(currentSetId, currentCard.id, status);
-
     if (currentIndex < activeCards.length - 1) {
       setCurrentIndex(currentIndex + 1);
     } else {
@@ -140,32 +138,35 @@ const App: React.FC = () => {
 
   const currentSet = videoSets.find(s => s.id === currentSetId);
 
-  // 1. 如果完全沒有金鑰，顯示強制輸入畫面
-  if (!currentKey && !isInitializing) {
+  // 初始化中
+  if (isInitializing) return <div className="min-h-screen bg-slate-50 flex items-center justify-center font-bold text-slate-400">Loading...</div>;
+
+  // 如果完全沒有金鑰，顯示全螢幕手動輸入介面
+  if (!currentKey) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white rounded-[2.5rem] p-10 shadow-2xl">
+        <div className="max-w-md w-full bg-white rounded-[2.5rem] p-10 shadow-2xl animate-in zoom-in duration-300">
           <div className="text-center mb-8">
             <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-6 transform rotate-12">🔑</div>
-            <h1 className="text-3xl font-black text-slate-900 mb-2">設定 API Key</h1>
-            <p className="text-slate-500 text-sm">請貼上您的 Google Gemini API Key 以開始使用</p>
+            <h1 className="text-3xl font-black text-slate-900 mb-2 tracking-tight">需要 API Key</h1>
+            <p className="text-slate-500 text-sm">請貼上您的 Google Gemini API Key 以啟動 AI 單字分析功能</p>
           </div>
           <form onSubmit={handleSaveKey} className="space-y-4">
             <input 
               autoFocus
               type="text"
-              placeholder="貼上您的 API Key (例如：AIzaSy...)"
+              placeholder="請在此貼上 API Key..."
               value={apiKeyInput}
               onChange={(e) => setApiKeyInput(e.target.value)}
-              className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-indigo-500 transition-all text-sm font-mono"
+              className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-indigo-500 transition-all font-mono text-sm"
             />
-            <button type="submit" className="w-full py-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-lg shadow-xl shadow-indigo-200 active:scale-95 transition-all">
-              儲存並進入 App
+            <button type="submit" className="w-full py-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-lg shadow-xl shadow-indigo-200 transition-all active:scale-95">
+              儲存並開始使用
             </button>
           </form>
           <div className="mt-8 pt-6 border-t border-slate-100 text-center">
             <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-indigo-600 text-xs font-bold hover:underline">
-              還沒有金鑰？去 Google AI Studio 免費申請 ↗
+              去 Google AI Studio 申請免費金鑰 ↗
             </a>
           </div>
         </div>
@@ -175,7 +176,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-32 px-4 pt-8 md:pt-12 relative">
-      {/* 2. API Key 設定彈窗 (隨時可以開啟) */}
       {showKeyConfig && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-sm rounded-3xl p-8 shadow-2xl relative animate-in zoom-in duration-200">
@@ -192,7 +192,7 @@ const App: React.FC = () => {
               />
               <button type="submit" className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold">更新金鑰</button>
             </form>
-            <p className="mt-4 text-[10px] text-slate-400 text-center uppercase tracking-widest">目前金鑰: {currentKey.substring(0, 8)}...</p>
+            <p className="mt-4 text-[10px] text-slate-400 text-center">金鑰儲存於本地瀏覽器，不會外流</p>
           </div>
         </div>
       )}
@@ -204,7 +204,7 @@ const App: React.FC = () => {
           </h1>
           <div className="flex items-center gap-2">
             <p className="text-slate-500 text-sm">影片單字圖書館</p>
-            <span className="px-2 py-0.5 rounded-full bg-green-50 text-green-600 text-[10px] font-black uppercase">Active</span>
+            <span className="px-2 py-0.5 rounded-full bg-green-50 text-green-600 text-[10px] font-black uppercase">API Ready</span>
           </div>
         </div>
         
@@ -240,8 +240,8 @@ const App: React.FC = () => {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {videoSets.map(set => (
-                    <div key={set.id} onClick={() => { setCurrentSetId(set.id); setView('setDetail'); }} className="group bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer relative">
-                      <button onClick={(e) => deleteSet(e, set.id)} className="absolute top-4 right-4 text-slate-300 hover:text-red-500">
+                    <div key={set.id} onClick={() => { setCurrentSetId(set.id); setView('setDetail'); }} className="group bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer relative overflow-hidden">
+                      <button onClick={(e) => deleteSet(e, set.id)} className="absolute top-4 right-4 text-slate-300 hover:text-red-500 transition-colors">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                       </button>
                       <h3 className="font-bold text-slate-800 mb-1 line-clamp-2 pr-8">{set.title}</h3>
