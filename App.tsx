@@ -6,8 +6,25 @@ import FlashcardItem from './components/FlashcardItem';
 import { extractVocabFromVideo } from './services/geminiService';
 
 const App: React.FC = () => {
+  // 1. 延遲初始化：從 localStorage 讀取初始狀態，避免重新整理時被空陣列蓋掉
+  const [videoSets, setVideoSets] = useState<VideoSet[]>(() => {
+    const saved = localStorage.getItem('vocab_master_sets');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error("Failed to parse saved sets", e);
+        return [];
+      }
+    }
+    return [];
+  });
+
+  const [currentKey, setCurrentKey] = useState<string>(() => {
+    return localStorage.getItem('VOCAB_MASTER_API_KEY') || '';
+  });
+
   const [isLoading, setIsLoading] = useState(false);
-  const [videoSets, setVideoSets] = useState<VideoSet[]>([]);
   const [currentSetId, setCurrentSetId] = useState<string | null>(null);
   const [activeCards, setActiveCards] = useState<Flashcard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -15,41 +32,28 @@ const App: React.FC = () => {
   
   const [showKeyConfig, setShowKeyConfig] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
-  const [currentKey, setCurrentKey] = useState<string>('');
   const [isInitializing, setIsInitializing] = useState(true);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    // 檢查 localStorage 或是 process.env (Vercel 建置時注入)
-    const savedKey = localStorage.getItem('VOCAB_MASTER_API_KEY');
-    const envKey = process.env.API_KEY;
-    
-    // 如果 envKey 是字串 "undefined" 代表沒設好，忽略它
-    const validEnvKey = (envKey && envKey !== "undefined" && envKey !== "null") ? envKey : "";
-    const finalKey = savedKey || validEnvKey;
-
-    if (finalKey) {
-      setCurrentKey(finalKey);
-      setApiKeyIntoGlobal(finalKey);
-    }
-    
-    const savedSets = localStorage.getItem('vocab_master_sets');
-    if (savedSets) {
-      try {
-        setVideoSets(JSON.parse(savedSets));
-      } catch (e) { console.error(e); }
-    }
-    setIsInitializing(false);
-  }, []);
-
+  // 全域注入金鑰的輔助函式
   const setApiKeyIntoGlobal = (key: string) => {
     if (!key) return;
-    // 強制注入到 window 全域，確保服務讀得到
     if (!(window as any).process) (window as any).process = { env: {} };
     if (!(window as any).process.env) (window as any).process.env = {};
     (window as any).process.env.API_KEY = key;
   };
+
+  // 初始化處理
+  useEffect(() => {
+    if (currentKey) {
+      setApiKeyIntoGlobal(currentKey);
+    }
+    setIsInitializing(false);
+  }, [currentKey]);
+
+  // 當 videoSets 變動時，自動儲存到 localStorage
+  useEffect(() => {
+    localStorage.setItem('vocab_master_sets', JSON.stringify(videoSets));
+  }, [videoSets]);
 
   const handleSaveKey = (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,7 +74,6 @@ const App: React.FC = () => {
       setShowKeyConfig(true);
       return;
     }
-    // 雙重保險：呼叫前再次確認注入
     setApiKeyIntoGlobal(currentKey);
     
     setIsLoading(true);
@@ -138,19 +141,15 @@ const App: React.FC = () => {
 
   const currentSet = videoSets.find(s => s.id === currentSetId);
 
-  // 初始化中
   if (isInitializing) return <div className="min-h-screen bg-slate-50 flex items-center justify-center font-bold text-slate-400">Loading...</div>;
 
-  // 如果完全沒有金鑰，顯示全螢幕手動輸入介面
   if (!currentKey) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white rounded-[2.5rem] p-10 shadow-2xl animate-in zoom-in duration-300">
-          <div className="text-center mb-8">
-            <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-6 transform rotate-12">🔑</div>
-            <h1 className="text-3xl font-black text-slate-900 mb-2 tracking-tight">需要 API Key</h1>
-            <p className="text-slate-500 text-sm">請貼上您的 Google Gemini API Key 以啟動 AI 單字分析功能</p>
-          </div>
+        <div className="max-w-md w-full bg-white rounded-[2.5rem] p-10 shadow-2xl animate-in zoom-in duration-300 text-center">
+          <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-6 transform rotate-12">🔑</div>
+          <h1 className="text-3xl font-black text-slate-900 mb-2 tracking-tight">需要 API Key</h1>
+          <p className="text-slate-500 text-sm mb-8">請貼上您的 Google Gemini API Key 以啟動 AI 分析功能</p>
           <form onSubmit={handleSaveKey} className="space-y-4">
             <input 
               autoFocus
@@ -164,7 +163,7 @@ const App: React.FC = () => {
               儲存並開始使用
             </button>
           </form>
-          <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+          <div className="mt-8 pt-6 border-t border-slate-100">
             <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-indigo-600 text-xs font-bold hover:underline">
               去 Google AI Studio 申請免費金鑰 ↗
             </a>
@@ -180,19 +179,18 @@ const App: React.FC = () => {
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-sm rounded-3xl p-8 shadow-2xl relative animate-in zoom-in duration-200">
             <button onClick={() => setShowKeyConfig(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600">✕</button>
-            <h3 className="text-xl font-black text-slate-900 mb-6">更換 API Key</h3>
+            <h3 className="text-xl font-black text-slate-900 mb-6">設定 API Key</h3>
             <form onSubmit={handleSaveKey} className="space-y-4">
               <input 
                 autoFocus
                 type="text"
-                placeholder="貼上新的 API Key..."
+                placeholder="貼上 API Key..."
                 value={apiKeyInput}
                 onChange={(e) => setApiKeyInput(e.target.value)}
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"
               />
               <button type="submit" className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold">更新金鑰</button>
             </form>
-            <p className="mt-4 text-[10px] text-slate-400 text-center">金鑰儲存於本地瀏覽器，不會外流</p>
           </div>
         </div>
       )}
@@ -204,22 +202,13 @@ const App: React.FC = () => {
           </h1>
           <div className="flex items-center gap-2">
             <p className="text-slate-500 text-sm">影片單字圖書館</p>
-            <span className="px-2 py-0.5 rounded-full bg-green-50 text-green-600 text-[10px] font-black uppercase">API Ready</span>
+            <span className="px-2 py-0.5 rounded-full bg-green-50 text-green-600 text-[10px] font-black uppercase">Auto-Save ON</span>
           </div>
         </div>
         
         <div className="flex gap-2">
-          <button 
-            onClick={() => setShowKeyConfig(true)}
-            className="px-4 py-2 bg-white text-slate-600 rounded-xl text-sm font-bold shadow-sm border border-slate-200 hover:bg-slate-50 transition-colors"
-          >
-            🔑 設定金鑰
-          </button>
-          {view !== 'home' && (
-            <button onClick={() => setView('home')} className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-sm font-bold border border-indigo-100">
-              返回主頁
-            </button>
-          )}
+          <button onClick={() => setShowKeyConfig(true)} className="px-4 py-2 bg-white text-slate-600 rounded-xl text-sm font-bold shadow-sm border border-slate-200">🔑 設定</button>
+          {view !== 'home' && <button onClick={() => setView('home')} className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-sm font-bold border border-indigo-100">返回</button>}
         </div>
       </header>
 
@@ -227,25 +216,19 @@ const App: React.FC = () => {
         {view === 'home' && (
           <div className="space-y-10">
             <YouTubeInput onProcess={handleProcessVideo} isLoading={isLoading} />
-            
             <div className="space-y-4">
-              <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                我的收藏 ({videoSets.length})
-              </h2>
-
+              <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">我的收藏 ({videoSets.length})</h2>
               {videoSets.length === 0 ? (
-                <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-slate-200 text-slate-400">
-                  尚無收藏，請貼上 YouTube 網址開始分析！
-                </div>
+                <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-slate-200 text-slate-400">尚無收藏，請貼上網址開始分析！</div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {videoSets.map(set => (
-                    <div key={set.id} onClick={() => { setCurrentSetId(set.id); setView('setDetail'); }} className="group bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer relative overflow-hidden">
+                    <div key={set.id} onClick={() => { setCurrentSetId(set.id); setView('setDetail'); }} className="group bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer relative">
                       <button onClick={(e) => deleteSet(e, set.id)} className="absolute top-4 right-4 text-slate-300 hover:text-red-500 transition-colors">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                       </button>
                       <h3 className="font-bold text-slate-800 mb-1 line-clamp-2 pr-8">{set.title}</h3>
-                      <p className="text-[10px] text-slate-400 mb-3 uppercase">{new Date(set.createdAt).toLocaleDateString()} · {set.cards.length} WORDS</p>
+                      <p className="text-[10px] text-slate-400 mb-3 uppercase tracking-wider">{new Date(set.createdAt).toLocaleDateString()} · {set.cards.length} WORDS</p>
                       <div className="flex gap-2">
                         <span className="px-2 py-1 bg-green-50 text-green-600 text-[10px] font-bold rounded-md uppercase">Mastered {set.cards.filter(c => c.status === 'learned').length}</span>
                       </div>
@@ -266,7 +249,6 @@ const App: React.FC = () => {
                 <button onClick={() => startLearning(currentSet.id, 'learning')} className="py-4 rounded-2xl font-bold border-2 border-amber-100 bg-amber-50 text-amber-600">複習剩餘</button>
               </div>
             </div>
-
             <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
               <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6">單字列表</h3>
               <div className="divide-y divide-slate-100">
@@ -279,9 +261,7 @@ const App: React.FC = () => {
                       </div>
                       <p className="text-sm text-slate-500">{card.translation}</p>
                     </div>
-                    <span className={`text-[10px] font-black uppercase ${card.status === 'learned' ? 'text-green-500' : 'text-amber-500'}`}>
-                      {card.status === 'learned' ? 'Mastered' : 'New'}
-                    </span>
+                    <span className={`text-[10px] font-black uppercase ${card.status === 'learned' ? 'text-green-500' : 'text-amber-500'}`}>{card.status === 'learned' ? 'Mastered' : 'New'}</span>
                   </div>
                 ))}
               </div>
@@ -305,9 +285,7 @@ const App: React.FC = () => {
           <div className="bg-white p-10 rounded-3xl shadow-xl border border-slate-200 text-center max-w-lg mx-auto">
             <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-6">🎉</div>
             <h2 className="text-2xl font-black text-slate-800 mb-3">練習完成！</h2>
-            <div className="flex flex-col gap-3 mt-8">
-              <button onClick={() => setView('home')} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black">回主畫面</button>
-            </div>
+            <button onClick={() => setView('home')} className="mt-8 w-full py-4 bg-indigo-600 text-white rounded-2xl font-black">回主畫面</button>
           </div>
         )}
       </main>
