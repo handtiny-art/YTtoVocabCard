@@ -3,7 +3,6 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Flashcard, GroundingSource } from "../types";
 
 export const extractVocabFromVideo = async (url: string): Promise<{ transcript: string, cards: Flashcard[], detectedTitle: string, sources: GroundingSource[] }> => {
-  // 優先讀取 App.tsx 注入到全域的金鑰，這才是使用者在 UI 輸入的那把
   const apiKey = (window as any).process?.env?.API_KEY;
   
   if (!apiKey || apiKey === "undefined" || apiKey.length < 10) {
@@ -12,28 +11,33 @@ export const extractVocabFromVideo = async (url: string): Promise<{ transcript: 
 
   const ai = new GoogleGenAI({ apiKey });
   
+  // 使用 Gemini 3 Flash：速度最快、對免費金鑰最寬容
+  const model = 'gemini-3-flash-preview';
+  
+  const systemInstruction = `你是一位頂尖的英語教學 AI 專家。
+你的特殊能力是能夠透過 Google Search 獲取 YouTube 影片的詳細逐字稿 (Transcript) 或分段摘要內容。
+你必須確保提取的單字與影片實際內容高度相關。`;
+
   const prompt = `
-    I need you to perform a deep analysis of this YouTube video: ${url}
+    請分析此 YouTube 影片：${url}
     
-    SEARCH STRATEGY:
-    1. Identify the YouTube Video ID from the URL.
-    2. Search for the exact video title and channel name to understand the context.
+    你的任務步驟：
+    1. 首先，使用 Google Search 尋找該影片的完整逐字稿或詳細內容描述。
+    2. 找出影片的正式標題 (detectedTitle)。
+    3. 撰寫一段約 150 字的中文化內容摘要 (summary)。
+    4. 從內容中挑選 10 個最適合中高階學習者的單字或片語。
+    5. 為每個單字提供：單字、詞性、精確翻譯、以及一個「完全符合影片情境」的英文例句。
     
-    OUTPUT REQUIREMENTS:
-    - detectedTitle: Official title of the video.
-    - summary: A cohesive summary (around 150 words) in Traditional Chinese.
-    - vocabulary: 10-12 practical or advanced English words/idioms found in the video.
-    
-    Provide everything in a structured JSON format.
+    請以 JSON 格式輸出。
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview', 
+      model: model,
       contents: prompt,
       config: {
+        systemInstruction,
         tools: [{ googleSearch: {} }],
-        thinkingConfig: { thinkingBudget: 32768 },
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -90,12 +94,12 @@ export const extractVocabFromVideo = async (url: string): Promise<{ transcript: 
 
     return {
       transcript: result.summary,
-      detectedTitle: result.detectedTitle,
+      detectedTitle: result.detectedTitle || "影片學習集",
       cards,
       sources
     };
   } catch (error: any) {
     console.error("Gemini Failure:", error);
-    throw new Error(error.message || "分析失敗，請檢查金鑰權限或網路連線。");
+    throw new Error(error.message || "分析失敗，請檢查金鑰權限。");
   }
 };

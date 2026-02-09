@@ -6,14 +6,12 @@ import FlashcardItem from './components/FlashcardItem';
 import { extractVocabFromVideo } from './services/geminiService';
 
 const App: React.FC = () => {
-  // 1. 延遲初始化：從 localStorage 讀取初始狀態，避免重新整理時被空陣列蓋掉
   const [videoSets, setVideoSets] = useState<VideoSet[]>(() => {
     const saved = localStorage.getItem('vocab_master_sets');
     if (saved) {
       try {
         return JSON.parse(saved);
       } catch (e) {
-        console.error("Failed to parse saved sets", e);
         return [];
       }
     }
@@ -34,7 +32,6 @@ const App: React.FC = () => {
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [isInitializing, setIsInitializing] = useState(true);
 
-  // 全域注入金鑰的輔助函式
   const setApiKeyIntoGlobal = (key: string) => {
     if (!key) return;
     if (!(window as any).process) (window as any).process = { env: {} };
@@ -42,15 +39,11 @@ const App: React.FC = () => {
     (window as any).process.env.API_KEY = key;
   };
 
-  // 初始化處理
   useEffect(() => {
-    if (currentKey) {
-      setApiKeyIntoGlobal(currentKey);
-    }
+    if (currentKey) setApiKeyIntoGlobal(currentKey);
     setIsInitializing(false);
   }, [currentKey]);
 
-  // 當 videoSets 變動時，自動儲存到 localStorage
   useEffect(() => {
     localStorage.setItem('vocab_master_sets', JSON.stringify(videoSets));
   }, [videoSets]);
@@ -81,7 +74,7 @@ const App: React.FC = () => {
       const { transcript, cards, detectedTitle, sources } = await extractVocabFromVideo(url);
       const newSet: VideoSet = {
         id: `set-${Date.now()}`,
-        url,
+        url: url,
         title: detectedTitle || `影片學習集 - ${new Date().toLocaleDateString()}`,
         transcript,
         cards,
@@ -202,7 +195,7 @@ const App: React.FC = () => {
           </h1>
           <div className="flex items-center gap-2">
             <p className="text-slate-500 text-sm">影片單字圖書館</p>
-            <span className="px-2 py-0.5 rounded-full bg-green-50 text-green-600 text-[10px] font-black uppercase">Auto-Save ON</span>
+            <span className="px-2 py-0.5 rounded-full bg-green-50 text-green-600 text-[10px] font-black uppercase">Auto-Fetch ON</span>
           </div>
         </div>
         
@@ -214,23 +207,23 @@ const App: React.FC = () => {
 
       <main className="max-w-4xl mx-auto">
         {view === 'home' && (
-          <div className="space-y-10">
+          <div className="space-y-12">
             <YouTubeInput onProcess={handleProcessVideo} isLoading={isLoading} />
             <div className="space-y-4">
               <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">我的收藏 ({videoSets.length})</h2>
               {videoSets.length === 0 ? (
-                <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-slate-200 text-slate-400">尚無收藏，請貼上網址開始分析！</div>
+                <div className="text-center py-20 bg-white rounded-[2rem] border-2 border-dashed border-slate-200 text-slate-400">尚無收藏，請貼上 YouTube 網址開始分析！</div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {videoSets.map(set => (
-                    <div key={set.id} onClick={() => { setCurrentSetId(set.id); setView('setDetail'); }} className="group bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer relative">
+                    <div key={set.id} onClick={() => { setCurrentSetId(set.id); setView('setDetail'); }} className="group bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:border-indigo-100 transition-all cursor-pointer relative">
                       <button onClick={(e) => deleteSet(e, set.id)} className="absolute top-4 right-4 text-slate-300 hover:text-red-500 transition-colors">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                       </button>
-                      <h3 className="font-bold text-slate-800 mb-1 line-clamp-2 pr-8">{set.title}</h3>
-                      <p className="text-[10px] text-slate-400 mb-3 uppercase tracking-wider">{new Date(set.createdAt).toLocaleDateString()} · {set.cards.length} WORDS</p>
+                      <h3 className="font-bold text-slate-800 mb-2 line-clamp-2 pr-8">{set.title}</h3>
+                      <p className="text-[10px] text-slate-400 mb-4 uppercase tracking-wider">{new Date(set.createdAt).toLocaleDateString()} · {set.cards.length} WORDS</p>
                       <div className="flex gap-2">
-                        <span className="px-2 py-1 bg-green-50 text-green-600 text-[10px] font-bold rounded-md uppercase">Mastered {set.cards.filter(c => c.status === 'learned').length}</span>
+                        <span className="px-3 py-1 bg-green-50 text-green-600 text-[10px] font-black rounded-full uppercase tracking-wider">Mastered {set.cards.filter(c => c.status === 'learned').length}</span>
                       </div>
                     </div>
                   ))}
@@ -242,26 +235,29 @@ const App: React.FC = () => {
 
         {view === 'setDetail' && currentSet && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
+            <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
               <h2 className="text-xl font-bold text-slate-800 mb-6">{currentSet.title}</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button onClick={() => startLearning(currentSet.id, 'all')} className="py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100">全部複習 ({currentSet.cards.length})</button>
-                <button onClick={() => startLearning(currentSet.id, 'learning')} className="py-4 rounded-2xl font-bold border-2 border-amber-100 bg-amber-50 text-amber-600">複習剩餘</button>
+                <button onClick={() => startLearning(currentSet.id, 'all')} className="py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100 active:scale-95 transition-all">全部複習 ({currentSet.cards.length})</button>
+                <button onClick={() => startLearning(currentSet.id, 'learning')} className="py-5 rounded-2xl font-black border-2 border-amber-100 bg-amber-50 text-amber-600 active:scale-95 transition-all">複習剩餘</button>
               </div>
             </div>
-            <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
+            
+            <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
               <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6">單字列表</h3>
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-slate-50">
                 {currentSet.cards.map(card => (
-                  <div key={card.id} className="py-4 flex justify-between items-center">
+                  <div key={card.id} className="py-4 flex justify-between items-center group">
                     <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-800">{card.word}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded uppercase">{card.partOfSpeech}</span>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="font-bold text-slate-800 text-lg">{card.word}</span>
+                        <span className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md font-black uppercase">{card.partOfSpeech}</span>
                       </div>
-                      <p className="text-sm text-slate-500">{card.translation}</p>
+                      <p className="text-sm text-slate-500 font-medium">{card.translation}</p>
                     </div>
-                    <span className={`text-[10px] font-black uppercase ${card.status === 'learned' ? 'text-green-500' : 'text-amber-500'}`}>{card.status === 'learned' ? 'Mastered' : 'New'}</span>
+                    <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-full ${card.status === 'learned' ? 'bg-green-50 text-green-500' : 'bg-slate-50 text-slate-300'}`}>
+                      {card.status === 'learned' ? 'Mastered' : 'New'}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -273,7 +269,7 @@ const App: React.FC = () => {
           <div className="flex flex-col items-center">
             <div className="w-full flex justify-between items-center mb-8 px-4">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{currentIndex + 1} / {activeCards.length}</span>
-              <div className="h-1.5 flex-1 mx-6 bg-slate-200 rounded-full overflow-hidden">
+              <div className="h-2 flex-1 mx-6 bg-slate-200 rounded-full overflow-hidden shadow-inner">
                 <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${((currentIndex + 1) / activeCards.length) * 100}%` }} />
               </div>
             </div>
@@ -282,10 +278,13 @@ const App: React.FC = () => {
         )}
 
         {view === 'summary' && (
-          <div className="bg-white p-10 rounded-3xl shadow-xl border border-slate-200 text-center max-w-lg mx-auto">
-            <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-6">🎉</div>
-            <h2 className="text-2xl font-black text-slate-800 mb-3">練習完成！</h2>
-            <button onClick={() => setView('home')} className="mt-8 w-full py-4 bg-indigo-600 text-white rounded-2xl font-black">回主畫面</button>
+          <div className="bg-white p-12 rounded-[3rem] shadow-2xl border border-slate-50 text-center max-w-lg mx-auto animate-in zoom-in duration-300">
+            <div className="w-24 h-24 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center text-4xl mx-auto mb-8 shadow-inner transform -rotate-6">🏆</div>
+            <h2 className="text-3xl font-black text-slate-800 mb-4 tracking-tight">今天的練習已達成！</h2>
+            <p className="text-slate-500 mb-10 leading-relaxed font-medium">持之以恆是掌握語言的唯一捷徑。<br/>明天也要來複習喔！</p>
+            <button onClick={() => setView('home')} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-lg shadow-xl shadow-indigo-100 active:scale-95 transition-all">
+              回到單字庫
+            </button>
           </div>
         )}
       </main>
