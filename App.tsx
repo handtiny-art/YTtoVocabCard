@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Flashcard, VideoSet } from './types';
 import YouTubeInput from './components/YouTubeInput';
 import FlashcardItem from './components/FlashcardItem';
@@ -9,11 +9,7 @@ const App: React.FC = () => {
   const [videoSets, setVideoSets] = useState<VideoSet[]>(() => {
     const saved = localStorage.getItem('vocab_master_sets');
     if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        return [];
-      }
+      try { return JSON.parse(saved); } catch (e) { return []; }
     }
     return [];
   });
@@ -24,6 +20,7 @@ const App: React.FC = () => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [retryStatus, setRetryStatus] = useState<string | null>(null);
+  const [cooldown, setCooldown] = useState(0); // 冷卻時間（秒）
   const [currentSetId, setCurrentSetId] = useState<string | null>(null);
   const [activeCards, setActiveCards] = useState<Flashcard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -32,6 +29,14 @@ const App: React.FC = () => {
   const [showKeyConfig, setShowKeyConfig] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [isInitializing, setIsInitializing] = useState(true);
+
+  // 冷卻計時器
+  useEffect(() => {
+    if (cooldown > 0) {
+      const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cooldown]);
 
   const setApiKeyIntoGlobal = (key: string) => {
     if (!key) return;
@@ -64,22 +69,24 @@ const App: React.FC = () => {
   };
 
   const handleProcessVideo = async (url: string) => {
+    if (cooldown > 0) return;
     if (!currentKey) {
       setShowKeyConfig(true);
       return;
     }
-    setApiKeyIntoGlobal(currentKey);
     
+    setApiKeyIntoGlobal(currentKey);
     setIsLoading(true);
     setRetryStatus(null);
+
     try {
       const { transcript, cards, detectedTitle, sources } = await extractVocabFromVideo(url, (attempt) => {
-        setRetryStatus(`API 繁忙，正在進行第 ${attempt} 次重試...`);
+        setRetryStatus(`頻率限制中，正在第 ${attempt} 次努力嘗試...`);
       });
       const newSet: VideoSet = {
         id: `set-${Date.now()}`,
         url: url,
-        title: detectedTitle || `影片學習集 - ${new Date().toLocaleDateString()}`,
+        title: detectedTitle || `影片單字集 - ${new Date().toLocaleDateString()}`,
         transcript,
         cards,
         sources,
@@ -89,6 +96,9 @@ const App: React.FC = () => {
       setCurrentSetId(newSet.id);
       setView('setDetail');
     } catch (error: any) {
+      if (error.message.includes("忙")) {
+        setCooldown(15); // 如果觸發 429，強制進入 15 秒冷卻
+      }
       alert(error.message);
     } finally {
       setIsLoading(false);
@@ -141,36 +151,6 @@ const App: React.FC = () => {
 
   if (isInitializing) return <div className="min-h-screen bg-slate-50 flex items-center justify-center font-bold text-slate-400">Loading...</div>;
 
-  if (!currentKey) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white rounded-[2.5rem] p-10 shadow-2xl animate-in zoom-in duration-300 text-center">
-          <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-6 transform rotate-12">🔑</div>
-          <h1 className="text-3xl font-black text-slate-900 mb-2 tracking-tight">請輸入 API 金鑰</h1>
-          <p className="text-slate-500 text-sm mb-8">請貼上您的 Google Gemini API Key 以啟動 AI 分析功能</p>
-          <form onSubmit={handleSaveKey} className="space-y-4">
-            <input 
-              autoFocus
-              type="text"
-              placeholder="請在此貼上 API Key..."
-              value={apiKeyInput}
-              onChange={(e) => setApiKeyInput(e.target.value)}
-              className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-indigo-500 transition-all font-mono text-sm"
-            />
-            <button type="submit" className="w-full py-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-lg shadow-xl shadow-indigo-200 transition-all active:scale-95">
-              儲存並開始使用
-            </button>
-          </form>
-          <div className="mt-8 pt-6 border-t border-slate-100">
-            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-indigo-600 text-xs font-bold hover:underline">
-              去 Google AI Studio 申請免費金鑰 ↗
-            </a>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-50 pb-32 px-4 pt-8 md:pt-12 relative">
       {showKeyConfig && (
@@ -200,7 +180,7 @@ const App: React.FC = () => {
           </h1>
           <div className="flex items-center gap-2">
             <p className="text-slate-500 text-sm">影片單字圖書館</p>
-            <span className="px-2 py-0.5 rounded-full bg-green-50 text-green-600 text-[10px] font-black uppercase">Auto-Fetch ON</span>
+            <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 text-[10px] font-black uppercase">Lite Free Mode</span>
           </div>
         </div>
         
@@ -213,7 +193,12 @@ const App: React.FC = () => {
       <main className="max-w-4xl mx-auto">
         {view === 'home' && (
           <div className="space-y-12">
-            <YouTubeInput onProcess={handleProcessVideo} isLoading={isLoading} retryStatus={retryStatus} />
+            <YouTubeInput 
+              onProcess={handleProcessVideo} 
+              isLoading={isLoading} 
+              retryStatus={retryStatus} 
+              cooldown={cooldown} 
+            />
             <div className="space-y-4">
               <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">我的收藏 ({videoSets.length})</h2>
               {videoSets.length === 0 ? (

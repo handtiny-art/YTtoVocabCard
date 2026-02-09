@@ -1,8 +1,7 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { Flashcard, GroundingSource } from "../types";
 
-// 指數退避等待函數
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const extractVocabFromVideo = async (
@@ -12,27 +11,35 @@ export const extractVocabFromVideo = async (
   const apiKey = (window as any).process?.env?.API_KEY;
   
   if (!apiKey || apiKey === "undefined" || apiKey.length < 10) {
-    throw new Error("偵測不到有效的 API 金鑰。請點擊右上角「🔑 設定」並貼上正確的金鑰。");
+    throw new Error("偵測不到有效的 API 金鑰。");
   }
 
+  // 重新實例化以確保抓到最新的 Key
   const ai = new GoogleGenAI({ apiKey });
   
-  // 使用 gemini-flash-lite-latest：對免費金鑰最友善、限制最寬鬆
-  const modelName = 'gemini-flash-lite-latest';
+  // gemini-2.5-flash-lite-latest 是專門為高頻率、輕量任務設計的
+  // 在免費方案下，它的 Quota 表現最穩定
+  const modelName = 'gemini-2.5-flash-lite-latest';
   
-  const systemInstruction = `你是一位專業英語老師。透過搜尋獲取 YouTube 影片內容並提取 10 個核心單字。`;
+  const systemInstruction = `You are an English teacher. 
+1. Use Google Search to find info/transcript for the YouTube URL provided.
+2. Return a summary and 10 difficult vocabulary words.
+3. You MUST respond ONLY with a JSON block. No explanation before or after.
 
-  const prompt = `分析影片：${url}。
-  請執行：
-  1. 取得標題 (detectedTitle)。
-  2. 撰寫 100 字中文化摘要 (summary)。
-  3. 提取 10 個核心單字 (word, partOfSpeech, translation, example)。
-  輸出格式：JSON。`;
+JSON Structure:
+{
+  "detectedTitle": "Video Title",
+  "summary": "Chinese Summary",
+  "vocabulary": [
+    {"word": "word", "partOfSpeech": "n/v/adj", "translation": "中文", "example": "English sentence"}
+  ]
+}`;
+
+  const prompt = `Analyze this video: ${url}. Return the JSON list now.`;
 
   let lastError: any = null;
-  const maxRetries = 3;
+  const maxRetries = 2;
 
-  // 實作重試迴圈
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const response = await ai.models.generateContent({
@@ -41,39 +48,17 @@ export const extractVocabFromVideo = async (
         config: {
           systemInstruction,
           tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              detectedTitle: { type: Type.STRING },
-              summary: { type: Type.STRING },
-              vocabulary: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    word: { type: Type.STRING },
-                    partOfSpeech: { type: Type.STRING },
-                    translation: { type: Type.STRING },
-                    example: { type: Type.STRING }
-                  },
-                  required: ["word", "partOfSpeech", "translation", "example"]
-                }
-              }
-            }
-          }
+          // 絕對不可在此設定 responseMimeType，否則會報 400 錯誤
+          temperature: 0.1,
         }
       });
 
       const responseText = response.text || "";
-      let result;
-      try {
-        result = JSON.parse(responseText.trim());
-      } catch (e) {
-        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) throw new Error("AI 回傳格式不正確。");
-        result = JSON.parse(jsonMatch[0]);
-      }
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      
+      if (!jsonMatch) throw new Error("AI 未能產出正確的單字格式，請再試一次。");
+
+      const result = JSON.parse(jsonMatch[0]);
       
       const sources: GroundingSource[] = [];
       const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
@@ -86,9 +71,9 @@ export const extractVocabFromVideo = async (
       }
 
       return {
-        transcript: result.summary,
+        transcript: result.summary || "暫無摘要",
         detectedTitle: result.detectedTitle || "影片單字集",
-        cards: result.vocabulary.map((v: any, index: number) => ({
+        cards: (result.vocabulary || []).map((v: any, index: number) => ({
           id: `card-${Date.now()}-${index}`,
           word: v.word,
           partOfSpeech: v.partOfSpeech,
@@ -101,10 +86,11 @@ export const extractVocabFromVideo = async (
 
     } catch (error: any) {
       lastError = error;
+      // 判斷是否為頻率限制 (429) 或配額耗盡
       const isRateLimit = error.message?.includes("429") || error.message?.includes("quota");
       
       if (isRateLimit && attempt < maxRetries) {
-        const waitTime = Math.pow(2, attempt) * 2000; // 2s, 4s, 8s
+        const waitTime = 5000; // 等待 5 秒後重試
         if (onRetry) onRetry(attempt + 1);
         await sleep(waitTime);
         continue;
@@ -113,9 +99,8 @@ export const extractVocabFromVideo = async (
     }
   }
 
-  // 如果噴錯了，給予友善的錯誤提示
   if (lastError?.message?.includes("429")) {
-    throw new Error("目前 Google API 請求過於頻繁（免費版金鑰限制）。請稍等 10 秒後再試一次，或是改用付費版金鑰。");
+    throw new Error("Google 伺服器目前太忙（免費版限制）。請等待約 15 秒後再點擊一次按鈕。");
   }
-  throw new Error(lastError?.message || "分析失敗，請檢查網路或金鑰。");
+  throw new Error(lastError?.message || "分析失敗，請檢查網址是否正確。");
 };
