@@ -32,7 +32,6 @@ const FlashcardItem: React.FC<FlashcardItemProps> = ({ card, onSwipeRight, onSwi
     const touchEndX = e.changedTouches[0].clientX;
     const diff = touchEndX - touchStartX.current;
     
-    // Swipe sensitivity threshold
     if (Math.abs(diff) > 100) {
       if (diff > 0) handleSwipe('right');
       else handleSwipe('left');
@@ -59,7 +58,7 @@ const FlashcardItem: React.FC<FlashcardItemProps> = ({ card, onSwipeRight, onSwi
           <h1 className="text-4xl font-bold text-slate-800 text-center break-words">{card.word}</h1>
           <div className="mt-8 flex items-center gap-2 text-slate-300">
             <svg className="w-4 h-4 animate-bounce-x" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M7 16l-4-4m0 0l4-4m-4 4h18" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            <p className="text-[10px] font-bold uppercase tracking-widest">Swipe or Tap</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest">滑動或點擊翻面</p>
             <svg className="w-4 h-4 animate-bounce-x-rev" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 8l4 4m0 0l-4 4m4-4H3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </div>
         </div>
@@ -79,7 +78,7 @@ const FlashcardItem: React.FC<FlashcardItemProps> = ({ card, onSwipeRight, onSwi
               <p className="text-white italic leading-relaxed text-sm font-medium">"{card.example}"</p>
             </div>
 
-            <p className="text-center text-white/40 text-[10px] font-bold uppercase tracking-widest mt-4">Tap to flip back</p>
+            <p className="text-center text-white/40 text-[10px] font-bold uppercase tracking-widest mt-4">點擊翻回正面</p>
           </div>
         </div>
       </div>
@@ -91,14 +90,14 @@ const FlashcardItem: React.FC<FlashcardItemProps> = ({ card, onSwipeRight, onSwi
           className="flex-1 py-4 bg-white border-2 border-slate-200 text-slate-400 rounded-2xl font-black flex flex-col items-center justify-center active:scale-95 transition-all shadow-sm group hover:border-amber-200 hover:text-amber-500"
         >
           <span className="text-xs mb-1 group-hover:-translate-x-1 transition-transform">←</span>
-          <span className="text-[10px] uppercase">Learning</span>
+          <span className="text-[10px] uppercase">還在學</span>
         </button>
         <button 
           onClick={(e) => { e.stopPropagation(); handleSwipe('right'); }}
           className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black flex flex-col items-center justify-center active:scale-95 transition-all shadow-lg shadow-indigo-100 group"
         >
           <span className="text-xs mb-1 group-hover:translate-x-1 transition-transform">→</span>
-          <span className="text-[10px] uppercase">Mastered</span>
+          <span className="text-[10px] uppercase">已學會</span>
         </button>
       </div>
 

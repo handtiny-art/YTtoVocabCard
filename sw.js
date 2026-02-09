@@ -1,12 +1,11 @@
 
-const CACHE_NAME = 'vocab-master-v5';
+const CACHE_NAME = 'vocab-master-v6';
 
-// 使用絕對路徑確保與 Manifest 一致
 const ASSETS = [
-  '/',
-  '/index.html',
-  '/index.tsx',
-  '/manifest.json',
+  './',
+  './index.html',
+  './index.tsx',
+  './manifest.json',
   'https://cdn-icons-png.flaticon.com/512/3898/3898082.png'
 ];
 
@@ -35,18 +34,16 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
-  // 導航請求攔截：確保打開 App 時不論路徑為何都優先回傳根路徑的內容
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
         .catch(() => {
-          return caches.match('/') || caches.match('/index.html');
+          return caches.match('./index.html') || caches.match('./');
         })
     );
     return;
   }
 
-  // 一般資源請求 (JS, CSS, Images)
   event.respondWith(
     caches.match(event.request).then((response) => {
       return response || fetch(event.request);
