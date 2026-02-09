@@ -23,6 +23,7 @@ const App: React.FC = () => {
   });
 
   const [isLoading, setIsLoading] = useState(false);
+  const [retryStatus, setRetryStatus] = useState<string | null>(null);
   const [currentSetId, setCurrentSetId] = useState<string | null>(null);
   const [activeCards, setActiveCards] = useState<Flashcard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -70,8 +71,11 @@ const App: React.FC = () => {
     setApiKeyIntoGlobal(currentKey);
     
     setIsLoading(true);
+    setRetryStatus(null);
     try {
-      const { transcript, cards, detectedTitle, sources } = await extractVocabFromVideo(url);
+      const { transcript, cards, detectedTitle, sources } = await extractVocabFromVideo(url, (attempt) => {
+        setRetryStatus(`API 繁忙，正在進行第 ${attempt} 次重試...`);
+      });
       const newSet: VideoSet = {
         id: `set-${Date.now()}`,
         url: url,
@@ -88,6 +92,7 @@ const App: React.FC = () => {
       alert(error.message);
     } finally {
       setIsLoading(false);
+      setRetryStatus(null);
     }
   };
 
@@ -208,7 +213,7 @@ const App: React.FC = () => {
       <main className="max-w-4xl mx-auto">
         {view === 'home' && (
           <div className="space-y-12">
-            <YouTubeInput onProcess={handleProcessVideo} isLoading={isLoading} />
+            <YouTubeInput onProcess={handleProcessVideo} isLoading={isLoading} retryStatus={retryStatus} />
             <div className="space-y-4">
               <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">我的收藏 ({videoSets.length})</h2>
               {videoSets.length === 0 ? (
