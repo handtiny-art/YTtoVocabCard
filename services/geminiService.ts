@@ -17,25 +17,24 @@ export const extractVocabFromVideo = async (
   // 重新實例化以確保抓到最新的 Key
   const ai = new GoogleGenAI({ apiKey });
   
-  // gemini-2.5-flash-lite-latest 是專門為高頻率、輕量任務設計的
-  // 在免費方案下，它的 Quota 表現最穩定
-  const modelName = 'gemini-2.5-flash-lite-latest';
+  // 使用官方推薦的 gemini-3-flash-preview，這在處理文字、搜尋與免費配額上最穩定
+  const modelName = 'gemini-3-flash-preview';
   
   const systemInstruction = `You are an English teacher. 
-1. Use Google Search to find info/transcript for the YouTube URL provided.
-2. Return a summary and 10 difficult vocabulary words.
-3. You MUST respond ONLY with a JSON block. No explanation before or after.
+1. Use Google Search to find information and context for the YouTube URL provided.
+2. Return a summary and 10 difficult vocabulary words from the video.
+3. You MUST respond ONLY with a JSON block. Do not include any explanation before or after the JSON.
 
 JSON Structure:
 {
   "detectedTitle": "Video Title",
-  "summary": "Chinese Summary",
+  "summary": "100-word Chinese Summary",
   "vocabulary": [
-    {"word": "word", "partOfSpeech": "n/v/adj", "translation": "中文", "example": "English sentence"}
+    {"word": "word", "partOfSpeech": "n/v/adj", "translation": "中文", "example": "English sentence context"}
   ]
 }`;
 
-  const prompt = `Analyze this video: ${url}. Return the JSON list now.`;
+  const prompt = `Analyze this video URL and extract 10 key words: ${url}`;
 
   let lastError: any = null;
   const maxRetries = 2;
@@ -48,17 +47,29 @@ JSON Structure:
         config: {
           systemInstruction,
           tools: [{ googleSearch: {} }],
-          // 絕對不可在此設定 responseMimeType，否則會報 400 錯誤
+          // 提醒：使用 tools (googleSearch) 時，API 不支援 responseMimeType: "application/json"
+          // 因此我們在下方手動解析回傳的字串
           temperature: 0.1,
         }
       });
 
       const responseText = response.text || "";
+      
+      // 利用正規表達式尋找字串中的 JSON 區塊
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       
-      if (!jsonMatch) throw new Error("AI 未能產出正確的單字格式，請再試一次。");
+      if (!jsonMatch) {
+        console.error("No JSON found in response:", responseText);
+        throw new Error("AI 回傳格式不正確，請再試一次。");
+      }
 
-      const result = JSON.parse(jsonMatch[0]);
+      let result;
+      try {
+        result = JSON.parse(jsonMatch[0]);
+      } catch (parseErr) {
+        console.error("JSON Parse Error. Raw text:", responseText);
+        throw new Error("解析 AI 資料時發生錯誤。");
+      }
       
       const sources: GroundingSource[] = [];
       const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
@@ -86,11 +97,14 @@ JSON Structure:
 
     } catch (error: any) {
       lastError = error;
-      // 判斷是否為頻率限制 (429) 或配額耗盡
-      const isRateLimit = error.message?.includes("429") || error.message?.includes("quota");
+      const msg = error.message || "";
       
+      // 如果是模型不存在 (404)，通常代表該區域未支援或名稱寫錯，直接中斷重試
+      if (msg.includes("404")) break;
+
+      const isRateLimit = msg.includes("429") || msg.includes("quota");
       if (isRateLimit && attempt < maxRetries) {
-        const waitTime = 5000; // 等待 5 秒後重試
+        const waitTime = 5000; 
         if (onRetry) onRetry(attempt + 1);
         await sleep(waitTime);
         continue;
@@ -100,7 +114,10 @@ JSON Structure:
   }
 
   if (lastError?.message?.includes("429")) {
-    throw new Error("Google 伺服器目前太忙（免費版限制）。請等待約 15 秒後再點擊一次按鈕。");
+    throw new Error("目前 Google 伺服器忙碌中。請等待約 15 秒後再重新點擊按鈕。");
   }
-  throw new Error(lastError?.message || "分析失敗，請檢查網址是否正確。");
+  if (lastError?.message?.includes("404")) {
+    throw new Error("模型配置錯誤 (404)。請嘗試更換 API Key 或檢查區域支援。");
+  }
+  throw new Error(lastError?.message || "分析失敗，請檢查網址是否有效。");
 };
