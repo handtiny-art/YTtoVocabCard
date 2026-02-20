@@ -19,19 +19,25 @@
   <script>
     window.process = window.process || { env: {} };
     
-    // 修正 Service Worker 註冊：確保路徑相對於目前的 HTML 檔案
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        const swPath = './sw.js'; 
-        navigator.serviceWorker.register(swPath)
-          .then(reg => console.log('SW Registered!', reg))
+        navigator.serviceWorker.register('./sw.js', { scope: './' })
+          .then(reg => {
+            console.log('SW Registered with scope:', reg.scope);
+            // 監測是否有新版本，若有則提示或自動更新
+            reg.onupdatefound = () => {
+              const installingWorker = reg.installing;
+              if (installingWorker) {
+                installingWorker.onstatechange = () => {
+                  if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    console.log('New content available; please refresh.');
+                  }
+                };
+              }
+            };
+          })
           .catch(err => {
-            // 如果是 Origin 錯誤，通常是因為預覽環境限制，優雅地處理而不崩潰
-            if (err.name === 'SecurityError') {
-              console.warn('Service Worker registration skipped due to cross-origin restriction in preview mode.');
-            } else {
-              console.error('SW Registration failed:', err);
-            }
+            console.warn('SW Registration failed, running without offline support:', err);
           });
       });
     }
@@ -44,6 +50,10 @@
       overscroll-behavior-y: contain;
     }
     ::-webkit-scrollbar { display: none; }
+    .perspective-1000 { perspective: 1000px; }
+    .backface-hidden { backface-visibility: hidden; }
+    .transform-style-3d { transform-style: preserve-3d; }
+    .rotate-y-180 { transform: rotateY(180deg); }
   </style>
 <script type="importmap">
 {
