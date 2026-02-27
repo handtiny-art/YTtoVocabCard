@@ -1,6 +1,5 @@
 
 {
-  "id": "vocab-master-app",
   "short_name": "VocabMaster",
   "name": "VocabMaster - YouTube 單字大師",
   "icons": [
@@ -11,8 +10,8 @@
       "purpose": "any maskable"
     }
   ],
-  "start_url": "./index.html",
-  "scope": ".",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "theme_color": "#4f46e5",

@@ -1,9 +1,10 @@
 
-const CACHE_NAME = 'vocab-master-v7'; // 更新版本號以清除舊快取
+const CACHE_NAME = 'vocab-master-v8'; // 更新版本號以清除舊快取
 
 const ASSETS = [
   './',
   './index.html',
+  './index.css',
   './manifest.json',
   'https://cdn-icons-png.flaticon.com/512/3898/3898082.png'
 ];
