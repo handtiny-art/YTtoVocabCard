@@ -4,16 +4,20 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "tsx server.ts",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
     "@google/genai": "^1.38.0",
     "@tailwindcss/vite": "^4.2.1",
+    "express": "^5.2.1",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "tailwindcss": "^4.2.1"
+    "tailwindcss": "^4.2.1",
+    "tsx": "^4.21.0",
+    "youtube-transcript": "^1.2.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

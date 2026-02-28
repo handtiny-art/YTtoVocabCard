@@ -5,6 +5,8 @@ export interface Flashcard {
   partOfSpeech: string;
   translation: string;
   example: string;
+  phonetic?: string;
+  cefrLevel?: string;
   status: 'new' | 'learning' | 'learned';
 }
 

@@ -55,7 +55,7 @@ const YouTubeInput: React.FC<YouTubeInputProps> = ({ onProcess, isLoading }) => 
       </form>
       
       <p className="mt-5 text-center text-[11px] text-slate-400 font-medium leading-relaxed">
-        Pro 版本使用高級推理模型，能更精準地抓取影片中的關鍵詞彙與語境。<br/>
+        系統使用高級推理模型，能更精準地抓取影片中的關鍵詞彙與語境。<br/>
         分析過程約需 5-10 秒，請保持網頁開啟。
       </p>
     </div>

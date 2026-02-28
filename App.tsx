@@ -18,6 +18,10 @@ const App: React.FC = () => {
     return localStorage.getItem('VOCAB_MASTER_API_KEY') || '';
   });
 
+  const [supadataKey, setSupadataKey] = useState<string>(() => {
+    return localStorage.getItem('VOCAB_MASTER_SUPADATA_KEY') || '';
+  });
+
   const [isLoading, setIsLoading] = useState(false);
   const [currentSetId, setCurrentSetId] = useState<string | null>(null);
   const [activeCards, setActiveCards] = useState<Flashcard[]>([]);
@@ -26,6 +30,7 @@ const App: React.FC = () => {
   
   const [showConfig, setShowConfig] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
+  const [supadataKeyInput, setSupadataKeyInput] = useState('');
   const [importText, setImportText] = useState('');
   const [isInitializing, setIsInitializing] = useState(true);
 
@@ -52,24 +57,40 @@ const App: React.FC = () => {
 
   const handleSaveKey = (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanKey = apiKeyInput.trim();
-    if (cleanKey.length > 10) {
-      setCurrentKey(cleanKey);
-      localStorage.setItem('VOCAB_MASTER_API_KEY', cleanKey);
-      setApiKeyIntoGlobal(cleanKey);
-      alert("API Key 儲存成功！");
+    const cleanGeminiKey = apiKeyInput.trim();
+    const cleanSupadataKey = supadataKeyInput.trim();
+    
+    let message = "";
+
+    if (cleanGeminiKey) {
+      setCurrentKey(cleanGeminiKey);
+      localStorage.setItem('VOCAB_MASTER_API_KEY', cleanGeminiKey);
+      setApiKeyIntoGlobal(cleanGeminiKey);
+      message += "Gemini API Key 已更新\n";
+    }
+
+    if (cleanSupadataKey) {
+      setSupadataKey(cleanSupadataKey);
+      localStorage.setItem('VOCAB_MASTER_SUPADATA_KEY', cleanSupadataKey);
+      message += "Supadata API Key 已更新\n";
+    }
+
+    if (message) {
+      alert(message + "儲存成功！");
       setApiKeyInput('');
+      setSupadataKeyInput('');
     }
   };
 
   const handleProcessVideo = async (url: string) => {
     if (!currentKey) {
+      alert("請先設定 Gemini API Key");
       setShowConfig(true);
       return;
     }
     setIsLoading(true);
     try {
-      const { transcript, cards, detectedTitle, sources } = await extractVocabFromVideo(url);
+      const { transcript, cards, detectedTitle, sources } = await extractVocabFromVideo(url, supadataKey);
       const newSet: VideoSet = {
         id: `set-${Date.now()}`,
         url,
@@ -222,17 +243,32 @@ const App: React.FC = () => {
             </h3>
 
             {/* API Key 區塊 */}
-            <div className="mb-10">
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Gemini API 金鑰</label>
-              <form onSubmit={handleSaveKey} className="flex gap-2">
-                <input 
-                  type="password"
-                  placeholder={currentKey ? "••••••••••••••••" : "貼上 API Key..."}
-                  value={apiKeyInput}
-                  onChange={(e) => setApiKeyInput(e.target.value)}
-                  className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-                <button type="submit" className="px-6 py-3 bg-slate-900 text-white rounded-xl font-bold active:scale-95 transition-all">儲存</button>
+            <div className="mb-10 space-y-6">
+              <form onSubmit={handleSaveKey} className="space-y-6">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Gemini API 金鑰</label>
+                  <input 
+                    type="password"
+                    placeholder={currentKey ? "••••••••••••••••" : "貼上 Gemini API Key..."}
+                    value={apiKeyInput}
+                    onChange={(e) => setApiKeyInput(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 mb-2"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Supadata API 金鑰 (抓字幕用)</label>
+                  <input 
+                    type="password"
+                    placeholder={supadataKey ? "••••••••••••••••" : "貼上 Supadata API Key..."}
+                    value={supadataKeyInput}
+                    onChange={(e) => setSupadataKeyInput(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 mb-2"
+                  />
+                  <p className="text-[10px] text-slate-400 ml-1">註：請至 <a href="https://supadata.ai" target="_blank" className="text-indigo-500 underline">supadata.ai</a> 申請免費 Key</p>
+                </div>
+
+                <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold active:scale-95 transition-all shadow-lg shadow-slate-100">儲存所有設定</button>
               </form>
             </div>
 
@@ -278,7 +314,6 @@ const App: React.FC = () => {
           </h1>
           <div className="flex items-center gap-2">
             <p className="text-slate-500 text-sm">影片單字大師</p>
-            <span className="px-2 py-0.5 rounded-full bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest">Pro 版本</span>
           </div>
         </div>
         
