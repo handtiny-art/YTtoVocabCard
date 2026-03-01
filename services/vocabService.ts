@@ -29,10 +29,7 @@ export const extractVocabFromVideo = async (url: string, supadataKey?: string): 
     const data = await transcriptResponse.json();
     
     if (data.error) {
-      if (data.error.includes("Supadata API Key")) {
-        throw new Error(data.error);
-      }
-      console.warn("Transcript disabled or error, using fallback search.");
+      console.warn("Transcript fetch failed:", data.error);
       useFallback = true;
       videoId = data.videoId || "";
     } else {

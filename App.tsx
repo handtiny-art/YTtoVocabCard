@@ -84,10 +84,19 @@ const App: React.FC = () => {
 
   const handleProcessVideo = async (url: string) => {
     if (!currentKey) {
-      alert("請先設定 Groq API Key");
+      alert("⚠️ 偵測到尚未設定 Groq API 金鑰。\n\n由於發佈環境與開發環境的金鑰不共用，請點擊右上角「⚙️ 設定」重新貼上您的 Groq API Key。");
       setShowConfig(true);
       return;
     }
+    
+    if (!supadataKey) {
+      const proceed = confirm("⚠️ 您尚未設定 Supadata API 金鑰，這會導致 AI 無法獲取真實逐字稿而產生錯誤內容。\n\n建議先前往「⚙️ 設定」填寫 Supadata Key。是否仍要繼續（AI 將嘗試盲猜內容）？");
+      if (!proceed) {
+        setShowConfig(true);
+        return;
+      }
+    }
+
     setIsLoading(true);
     try {
       const { transcript, cards, detectedTitle, sources } = await extractVocabFromVideo(url, supadataKey);
