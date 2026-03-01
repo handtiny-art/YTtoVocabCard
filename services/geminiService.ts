@@ -43,9 +43,7 @@ export const extractVocabFromVideo = async (url: string, supadataKey?: string): 
     useFallback = true;
   }
   
-  // 使用相容性最高的 Flash 模型名稱
-  const modelName = 'gemini-1.5-flash';
-
+  // 強化指令：根據是否有字幕調整策略
   const systemInstruction = useFallback 
     ? `你是一位專精於 CEFR 分級的資深英語老師。
 使用者提供的影片無法直接抓取逐字稿，請你利用 Google Search 搜尋該影片 ID (${videoId}) 的標題與實際內容。
@@ -77,94 +75,108 @@ ${transcriptText}
     ? `請針對此影片 ID (${videoId}) 進行深度分析並提取進階核心單字：https://www.youtube.com/watch?v=${videoId}`
     : `請根據提供的逐字稿執行任務：篩選 B2 以上單字、產生摘要並輸出 JSON。`;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: modelName, 
-      contents: prompt,
-      config: {
-        systemInstruction,
-        tools: useFallback ? [{ googleSearch: {} }] : undefined,
-        responseMimeType: "application/json",
-        // 放寬安全設定以避免誤判
-        safetySettings: [
-          { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-          { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-          { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-          { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-        ],
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            detectedTitle: { type: Type.STRING },
-            summary: { type: Type.STRING },
-            vocabulary: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  word: { type: Type.STRING },
-                  level: { type: Type.STRING },
-                  definition: { type: Type.STRING },
-                  sentence: { type: Type.STRING }
-                },
-                required: ["word", "level", "definition", "sentence"]
-              }
-            }
-          },
-          required: ["detectedTitle", "summary", "vocabulary"]
-        }
-      }
-    });
+  // 嘗試多個可能的模型名稱以解決 404 問題，優先使用最新的 Gemini 3 系列
+  const modelsToTry = ['gemini-3-flash-preview', 'gemini-flash-latest'];
+  let lastError = null;
 
-    let result;
+  for (const modelName of modelsToTry) {
     try {
-      result = JSON.parse(response.text.trim());
-    } catch (e) {
-      const jsonMatch = response.text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        result = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error("AI 回傳格式錯誤。");
-      }
-    }
-    
-    const sources: GroundingSource[] = [];
-    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-    if (chunks) {
-      chunks.forEach((chunk: any) => {
-        if (chunk.web && chunk.web.uri) {
-          sources.push({ title: chunk.web.title || "驗證來源", url: chunk.web.uri });
+      console.log(`[Gemini] Attempting analysis with model: ${modelName}`);
+      const response = await ai.models.generateContent({
+        model: modelName, 
+        contents: prompt,
+        config: {
+          systemInstruction,
+          tools: useFallback ? [{ googleSearch: {} }] : undefined,
+          responseMimeType: "application/json",
+          safetySettings: [
+            { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+          ],
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              detectedTitle: { type: Type.STRING },
+              summary: { type: Type.STRING },
+              vocabulary: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    word: { type: Type.STRING },
+                    level: { type: Type.STRING },
+                    definition: { type: Type.STRING },
+                    sentence: { type: Type.STRING }
+                  },
+                  required: ["word", "level", "definition", "sentence"]
+                }
+              }
+            },
+            required: ["detectedTitle", "summary", "vocabulary"]
+          }
         }
       });
-    }
 
-    const cards: Flashcard[] = result.vocabulary.map((v: any, index: number) => ({
-      id: `card-${Date.now()}-${index}`,
-      word: v.word,
-      cefrLevel: v.level,
-      translation: v.definition,
-      example: v.sentence,
-      partOfSpeech: 'n/a',
-      status: 'new'
-    }));
+      let result;
+      try {
+        result = JSON.parse(response.text.trim());
+      } catch (e) {
+        const jsonMatch = response.text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          result = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error("AI 回傳格式錯誤。");
+        }
+      }
+      
+      const sources: GroundingSource[] = [];
+      const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+      if (chunks) {
+        chunks.forEach((chunk: any) => {
+          if (chunk.web && chunk.web.uri) {
+            sources.push({ title: chunk.web.title || "驗證來源", url: chunk.web.uri });
+          }
+        });
+      }
 
-    return {
-      transcript: result.summary,
-      detectedTitle: result.detectedTitle || detectedTitle,
-      cards,
-      sources
-    };
-  } catch (error: any) {
-    console.error("Gemini API Error:", error);
-    // 顯示更具體的錯誤訊息
-    const errorMsg = error.message || "";
-    if (errorMsg.includes("API_KEY_INVALID")) {
-      throw new Error("Gemini API 金鑰無效，請檢查是否複製正確。");
-    } else if (errorMsg.includes("QUOTA_EXCEEDED")) {
-      throw new Error("已達到免費版 API 使用限額，請稍後再試。");
-    } else if (errorMsg.includes("SAFETY")) {
-      throw new Error("影片內容觸發了安全過濾器，AI 拒絕分析。");
+      const cards: Flashcard[] = result.vocabulary.map((v: any, index: number) => ({
+        id: `card-${Date.now()}-${index}`,
+        word: v.word,
+        cefrLevel: v.level,
+        translation: v.definition,
+        example: v.sentence,
+        partOfSpeech: 'n/a',
+        status: 'new'
+      }));
+
+      return {
+        transcript: result.summary,
+        detectedTitle: result.detectedTitle || detectedTitle,
+        cards,
+        sources
+      };
+    } catch (error: any) {
+      lastError = error;
+      const errorMsg = error.message || "";
+      // 如果不是 404 錯誤，就沒必要嘗試下一個模型，直接拋出
+      if (!errorMsg.includes("404") && !errorMsg.includes("not found")) {
+        break;
+      }
+      console.warn(`[Gemini] Model ${modelName} failed with 404, trying next...`);
     }
-    throw new Error(`分析失敗: ${errorMsg || "請檢查網路或 API 設定"}`);
   }
+
+  // 如果走到這，代表所有嘗試都失敗了
+  console.error("Gemini API Final Error:", lastError);
+  const finalErrorMsg = lastError?.message || "";
+  if (finalErrorMsg.includes("API_KEY_INVALID")) {
+    throw new Error("Gemini API 金鑰無效，請檢查是否複製正確。");
+  } else if (finalErrorMsg.includes("QUOTA_EXCEEDED")) {
+    throw new Error("已達到免費版 API 使用限額，請稍後再試。");
+  } else if (finalErrorMsg.includes("SAFETY")) {
+    throw new Error("影片內容觸發了安全過濾器，AI 拒絕分析。");
+  }
+  throw new Error(`分析失敗: ${finalErrorMsg || "所有模型嘗試均失敗，請檢查 API 設定"}`);
 };
