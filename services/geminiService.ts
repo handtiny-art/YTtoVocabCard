@@ -1,12 +1,12 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { Flashcard, GroundingSource } from "../types";
 
 export const extractVocabFromVideo = async (url: string, supadataKey?: string): Promise<{ transcript: string, cards: Flashcard[], detectedTitle: string, sources: GroundingSource[] }> => {
   const apiKey = (window as any).process?.env?.API_KEY;
   
   if (!apiKey || apiKey === "undefined" || apiKey.length < 10) {
-    throw new Error("偵測不到有效的 API 金鑰。請點擊右上角「⚙️ 設定」並貼上正確的金鑰。");
+    throw new Error("偵測不到有效的 Gemini API 金鑰。請點擊右上角「⚙️ 設定」並貼上正確的金鑰。");
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -25,13 +25,17 @@ export const extractVocabFromVideo = async (url: string, supadataKey?: string): 
     });
     const data = await transcriptResponse.json();
     
-    if (data.error === "TRANSCRIPT_DISABLED" || !data.transcript) {
-      console.warn("Transcript disabled, using fallback search.");
+    if (data.error) {
+      if (data.error.includes("Supadata API Key")) {
+        throw new Error(data.error);
+      }
+      console.warn("Transcript disabled or error, using fallback search.");
       useFallback = true;
       videoId = data.videoId || "";
     } else {
-      transcriptText = data.transcript;
-      detectedTitle = data.title;
+      // 截斷過長的逐字稿以確保穩定性
+      transcriptText = data.transcript ? data.transcript.substring(0, 30000) : "";
+      detectedTitle = data.title || "YouTube Video";
       videoId = data.videoId;
     }
   } catch (error: any) {
@@ -39,8 +43,8 @@ export const extractVocabFromVideo = async (url: string, supadataKey?: string): 
     useFallback = true;
   }
   
-  // 強化指令：根據是否有字幕調整策略
-  const modelName = useFallback ? 'gemini-3-flash-preview' : 'gemini-flash-latest';
+  // 使用最穩定的 Flash 模型
+  const modelName = 'gemini-1.5-flash-latest';
 
   const systemInstruction = useFallback 
     ? `你是一位專精於 CEFR 分級的資深英語老師。
@@ -51,33 +55,27 @@ export const extractVocabFromVideo = async (url: string, supadataKey?: string): 
 
 工作規範：
 1. 產生一段約 150 字的繁體中文內容摘要 (summary)。
-2. 篩選準則：僅挑選符合 CEFR B2 (Upper-Intermediate) 到 C2 難度的核心單詞或片語。
-3. 嚴格排除：不要包含 A1/A2/B1 等級的簡單詞彙（如: take, decide, important, think）。
-4. 數量：請找出所有符合等級的進階詞彙，不要只限制在 5 個。
-5. 每個單字必須包含：單字 (word)、CEFR 等級 (level: B2/C1/C2)、中文解釋 (definition)、影片原句參考 (sentence)。
+2. 篩選準則：僅挑選符合 CEFR B2 到 C2 難度的核心單詞或片語。
+3. 數量：請找出所有符合等級的進階詞彙。
+4. 每個單字必須包含：單字 (word)、CEFR 等級 (level: B2/C1/C2)、中文解釋 (definition)、影片原句參考 (sentence)。
 
-輸出規範：
-- 必須嚴格遵守 JSON 格式。
-- 語系：繁體中文 (台灣)。`
+輸出規範：必須嚴格遵守 JSON 格式。`
     : `你是一位專精於 CEFR 分級的資深英語老師。
 以下是從 YouTube 影片中提取的真實逐字稿：
 ---
 ${transcriptText}
 ---
 請根據這段文字執行以下任務：
-1. 篩選準則：僅挑選符合 CEFR B2 (Upper-Intermediate) 到 C2 難度的核心單詞或片語。
-2. 嚴格排除：不要包含 A1/A2/B1 等級的簡單詞彙（如: take, decide, important, think）。
-3. 數量：請找出所有符合等級的進階詞彙，不要只限制在 5 個。
-4. 內容摘要：產生一段約 150 字的繁體中文內容摘要 (summary)，必須 100% 基於提供的逐字稿。
-5. 每個單字必須包含：單字 (word)、CEFR 等級 (level: B2/C1/C2)、中文解釋 (definition)、影片原句參考 (sentence)。
+1. 篩選準則：僅挑選符合 CEFR B2 到 C2 難度的核心單詞或片語。
+2. 數量：請找出所有符合等級的進階詞彙。
+3. 內容摘要：產生一段約 150 字的繁體中文內容摘要 (summary)，必須 100% 基於提供的逐字稿。
+4. 每個單字必須包含：單字 (word)、CEFR 等級 (level: B2/C1/C2)、中文解釋 (definition)、影片原句參考 (sentence)。
 
-輸出規範：
-- 必須嚴格遵守 JSON 格式。
-- 語系：繁體中文 (台灣)。`;
+輸出規範：必須嚴格遵守 JSON 格式。`;
 
   const prompt = useFallback 
     ? `請針對此影片 ID (${videoId}) 進行深度分析並提取進階核心單字：https://www.youtube.com/watch?v=${videoId}`
-    : `你是一位專精於 CEFR 分級的資深英語老師。請根據提供的逐字稿執行任務：篩選 B2 以上單字、產生摘要並輸出 JSON。`;
+    : `請根據提供的逐字稿執行任務：篩選 B2 以上單字、產生摘要並輸出 JSON。`;
 
   try {
     const response = await ai.models.generateContent({
@@ -85,23 +83,29 @@ ${transcriptText}
       contents: prompt,
       config: {
         systemInstruction,
-        // 只有在 fallback 模式下才開啟搜尋工具
         tools: useFallback ? [{ googleSearch: {} }] : undefined,
         responseMimeType: "application/json",
+        // 放寬安全設定以避免誤判
+        safetySettings: [
+          { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+          { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+          { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+          { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+        ],
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            detectedTitle: { type: Type.STRING, description: "影片的正確完整標題" },
-            summary: { type: Type.STRING, description: "與該影片完全相符的內容摘要" },
+            detectedTitle: { type: Type.STRING },
+            summary: { type: Type.STRING },
             vocabulary: {
               type: Type.ARRAY,
               items: {
                 type: Type.OBJECT,
                 properties: {
                   word: { type: Type.STRING },
-                  level: { type: Type.STRING, description: "CEFR 等級 (B2/C1/C2)" },
-                  definition: { type: Type.STRING, description: "中文解釋" },
-                  sentence: { type: Type.STRING, description: "影片中的原句" }
+                  level: { type: Type.STRING },
+                  definition: { type: Type.STRING },
+                  sentence: { type: Type.STRING }
                 },
                 required: ["word", "level", "definition", "sentence"]
               }
@@ -114,21 +118,13 @@ ${transcriptText}
 
     let result;
     try {
-      // 優先嘗試直接解析
       result = JSON.parse(response.text.trim());
     } catch (e) {
-      // 如果失敗，嘗試正則提取 JSON 區塊
       const jsonMatch = response.text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        try {
-          result = JSON.parse(jsonMatch[0]);
-        } catch (innerE) {
-          console.error("JSON parse failed even with regex:", response.text);
-          throw new Error("AI 回傳格式不正確，請再試一次。");
-        }
+        result = JSON.parse(jsonMatch[0]);
       } else {
-        console.error("No JSON found in response:", response.text);
-        throw new Error("AI 無法產生正確的格式，請稍後再試。");
+        throw new Error("AI 回傳格式錯誤。");
       }
     }
     
@@ -148,18 +144,27 @@ ${transcriptText}
       cefrLevel: v.level,
       translation: v.definition,
       example: v.sentence,
-      partOfSpeech: 'n/a', // AI didn't provide this in the new format, but we keep it for type compatibility
+      partOfSpeech: 'n/a',
       status: 'new'
     }));
 
     return {
       transcript: result.summary,
-      detectedTitle: result.detectedTitle,
+      detectedTitle: result.detectedTitle || detectedTitle,
       cards,
       sources
     };
   } catch (error: any) {
-    console.error("Gemini Failure:", error);
-    throw new Error(error.message || "分析失敗，這可能是因為該影片受限或 AI 無法精確鎖定內容。");
+    console.error("Gemini API Error:", error);
+    // 顯示更具體的錯誤訊息
+    const errorMsg = error.message || "";
+    if (errorMsg.includes("API_KEY_INVALID")) {
+      throw new Error("Gemini API 金鑰無效，請檢查是否複製正確。");
+    } else if (errorMsg.includes("QUOTA_EXCEEDED")) {
+      throw new Error("已達到免費版 API 使用限額，請稍後再試。");
+    } else if (errorMsg.includes("SAFETY")) {
+      throw new Error("影片內容觸發了安全過濾器，AI 拒絕分析。");
+    }
+    throw new Error(`分析失敗: ${errorMsg || "請檢查網路或 API 設定"}`);
   }
 };
