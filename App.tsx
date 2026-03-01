@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Flashcard, VideoSet } from './types';
 import YouTubeInput from './components/YouTubeInput';
 import FlashcardItem from './components/FlashcardItem';
-import { extractVocabFromVideo } from './services/geminiService';
+import { extractVocabFromVideo } from './services/vocabService';
 
 const App: React.FC = () => {
   const [videoSets, setVideoSets] = useState<VideoSet[]>(() => {
@@ -15,7 +15,7 @@ const App: React.FC = () => {
   });
 
   const [currentKey, setCurrentKey] = useState<string>(() => {
-    return localStorage.getItem('VOCAB_MASTER_API_KEY') || '';
+    return localStorage.getItem('VOCAB_MASTER_GROQ_KEY') || '';
   });
 
   const [supadataKey, setSupadataKey] = useState<string>(() => {
@@ -64,9 +64,9 @@ const App: React.FC = () => {
 
     if (cleanGeminiKey) {
       setCurrentKey(cleanGeminiKey);
-      localStorage.setItem('VOCAB_MASTER_API_KEY', cleanGeminiKey);
+      localStorage.setItem('VOCAB_MASTER_GROQ_KEY', cleanGeminiKey);
       setApiKeyIntoGlobal(cleanGeminiKey);
-      message += "Gemini API Key 已更新\n";
+      message += "Groq API Key 已更新\n";
     }
 
     if (cleanSupadataKey) {
@@ -84,7 +84,7 @@ const App: React.FC = () => {
 
   const handleProcessVideo = async (url: string) => {
     if (!currentKey) {
-      alert("請先設定 Gemini API Key");
+      alert("請先設定 Groq API Key");
       setShowConfig(true);
       return;
     }
@@ -246,14 +246,15 @@ const App: React.FC = () => {
             <div className="mb-10 space-y-6">
               <form onSubmit={handleSaveKey} className="space-y-6">
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Gemini API 金鑰</label>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Groq API 金鑰</label>
                   <input 
                     type="password"
-                    placeholder={currentKey ? "••••••••••••••••" : "貼上 Gemini API Key..."}
+                    placeholder={currentKey ? "••••••••••••••••" : "貼上 Groq API Key..."}
                     value={apiKeyInput}
                     onChange={(e) => setApiKeyInput(e.target.value)}
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 mb-2"
                   />
+                  <p className="text-[10px] text-slate-400 ml-1">註：請至 <a href="https://console.groq.com" target="_blank" className="text-indigo-500 underline">console.groq.com</a> 申請免費 Key</p>
                 </div>
 
                 <div>
