@@ -43,8 +43,8 @@ export const extractVocabFromVideo = async (url: string, supadataKey?: string): 
     useFallback = true;
   }
   
-  // 使用最穩定的 Flash 模型
-  const modelName = 'gemini-1.5-flash-latest';
+  // 使用相容性最高的 Flash 模型名稱
+  const modelName = 'gemini-1.5-flash';
 
   const systemInstruction = useFallback 
     ? `你是一位專精於 CEFR 分級的資深英語老師。
