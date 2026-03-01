@@ -29,18 +29,22 @@ export const extractVocabFromVideo = async (url: string, supadataKey?: string): 
     const data = await transcriptResponse.json();
     
     if (data.error) {
-      console.warn("Transcript fetch failed:", data.error);
-      useFallback = true;
-      videoId = data.videoId || "";
-    } else {
-      // 截斷過長的逐字稿以確保穩定性
-      transcriptText = data.transcript ? data.transcript.substring(0, 30000) : "";
-      detectedTitle = data.title || "YouTube Video";
-      videoId = data.videoId;
+      if (data.error.includes("尚未設定 Supadata API Key")) {
+        throw new Error("❌ 尚未設定 Supadata API Key。請點擊右上角「⚙️ 設定」填寫，否則無法獲取影片內容。");
+      }
+      throw new Error(`❌ 無法獲取影片逐字稿：${data.error}`);
     }
+
+    if (!data.transcript || data.transcript.length < 100) {
+      throw new Error("❌ 影片逐字稿內容過短或不存在。請確認該影片是否有提供英文字幕，或嘗試其他影片。");
+    }
+
+    transcriptText = data.transcript.substring(0, 30000);
+    detectedTitle = data.title || "YouTube Video";
+    videoId = data.videoId;
   } catch (error: any) {
-    console.warn("Transcript fetch error, falling back:", error.message);
-    useFallback = true;
+    console.error("Transcript fetch error:", error.message);
+    throw error; // 直接拋出錯誤，不再使用 fallback
   }
   
   const systemInstruction = `你是一位專精於 CEFR 分級的資深英語老師。
@@ -59,9 +63,7 @@ export const extractVocabFromVideo = async (url: string, supadataKey?: string): 
   ]
 }`;
 
-  const userPrompt = useFallback 
-    ? `請針對此影片 ID (${videoId}) 進行深度分析並提取進階核心單字：https://www.youtube.com/watch?v=${videoId}。由於無法直接獲取逐字稿，請根據您的知識庫分析該影片內容。`
-    : `這是逐字稿內容：\n---\n${transcriptText}\n---\n請執行任務並輸出 JSON。`;
+  const userPrompt = `這是逐字稿內容：\n---\n${transcriptText}\n---\n請執行任務並輸出 JSON。`;
 
   try {
     const completion = await groq.chat.completions.create({
