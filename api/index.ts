@@ -1,11 +1,13 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
-import { YoutubeTranscript } from 'youtube-transcript';
+import path from "path";
+import { fileURLToPath } from "url";
 
-async function startServer() {
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+async function createServer() {
   const app = express();
-  const PORT = 3000;
-
   app.use(express.json());
 
   // API route to fetch YouTube transcript and title
@@ -65,14 +67,6 @@ async function startServer() {
         videoId: videoId
       });
     } catch (error: any) {
-      if (error.message?.includes('Transcript is disabled') || error.message?.includes('No transcript found')) {
-        return res.json({ 
-          transcript: null, 
-          title: "YouTube Video (No Transcript)", 
-          videoId: videoId,
-          error: "TRANSCRIPT_DISABLED"
-        });
-      }
       console.error("Transcript error:", error);
       res.status(500).json({ error: error.message || "Failed to fetch transcript." });
     }
@@ -86,15 +80,35 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static("dist"));
-    app.get("*", (req, res) => {
-      res.sendFile("dist/index.html", { root: "." });
+    // In production, serve static files from dist
+    // Note: On Vercel, static files are usually served by Vercel itself via rewrites
+    // but this serves as a fallback or for other environments.
+    const distPath = path.resolve(__dirname, "../dist");
+    app.use(express.static(distPath));
+    
+    app.get("*", (req, res, next) => {
+      if (req.path.startsWith('/api')) return next();
+      res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
+  return app;
+}
+
+const appPromise = createServer();
+
+// For local development
+if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
+  appPromise.then(app => {
+    const PORT = 3000;
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://0.0.0.0:${PORT}`);
+    });
   });
 }
 
-startServer();
+// Export for Vercel
+export default async (req: any, res: any) => {
+  const app = await appPromise;
+  return app(req, res);
+};
