@@ -1,5 +1,4 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -74,6 +73,7 @@ async function createServer() {
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -81,8 +81,6 @@ async function createServer() {
     app.use(vite.middlewares);
   } else {
     // In production, serve static files from dist
-    // Note: On Vercel, static files are usually served by Vercel itself via rewrites
-    // but this serves as a fallback or for other environments.
     const distPath = path.resolve(__dirname, "../dist");
     app.use(express.static(distPath));
     
