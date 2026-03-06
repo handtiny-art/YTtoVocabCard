@@ -28,10 +28,15 @@ async function createServer() {
         throw new Error("尚未設定 Supadata API Key。請在設定頁面中填入。");
       }
 
-      // Fetch transcript using Supadata
-      const transcriptResponse = await fetch(`https://api.supadata.ai/v1/youtube/transcript?url=${encodeURIComponent(videoUrl)}`, {
-        headers: { 'x-api-key': SUPADATA_API_KEY }
-      });
+      console.log(`[Server] Fetching data for Video ID: ${videoId}`);
+
+      // Parallelize transcript and title fetching
+      const [transcriptResponse, oEmbedResponse] = await Promise.all([
+        fetch(`https://api.supadata.ai/v1/youtube/transcript?url=${encodeURIComponent(videoUrl)}`, {
+          headers: { 'x-api-key': SUPADATA_API_KEY }
+        }),
+        fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`).catch(() => null)
+      ]);
 
       if (!transcriptResponse.ok) {
         const errorText = await transcriptResponse.text();
@@ -45,20 +50,14 @@ async function createServer() {
       }
 
       const fullText = transcriptData.content.map(item => item.text).join(' ');
-      console.log(`[Server] Transcript fetched successfully via Supadata. Length: ${fullText.length}`);
-
-      // Try to fetch video title via oEmbed (no API key needed)
+      
       let title = "YouTube Video";
-      try {
-        const oEmbedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
-        const oEmbedResponse = await fetch(oEmbedUrl);
-        if (oEmbedResponse.ok) {
-          const oEmbedData = await oEmbedResponse.json() as { title: string };
-          title = oEmbedData.title;
-        }
-      } catch (e) {
-        console.warn("Failed to fetch title via oEmbed", e);
+      if (oEmbedResponse && oEmbedResponse.ok) {
+        const oEmbedData = await oEmbedResponse.json() as { title: string };
+        title = oEmbedData.title;
       }
+
+      console.log(`[Server] Success. Transcript length: ${fullText.length}`);
 
       res.json({ 
         transcript: fullText,
