@@ -1,5 +1,6 @@
 
 import { GoogleGenAI } from "@google/genai";
+import OpenAI from "openai";
 import { Flashcard, GroundingSource } from "../types";
 
 /**
@@ -58,23 +59,20 @@ export const fetchTranscript = async (url: string, supadataKey?: string): Promis
 };
 
 /**
- * 第二階段：使用 Gemini 進行分析
+ * 第二階段：使用 AI 進行分析
  */
-export const analyzeTranscript = async (transcript: string, title: string): Promise<{ summary: string, cards: Flashcard[] }> => {
-  console.log("[VocabService] 階段 2: 正在使用 Gemini 進行 AI 分析...");
-  
-  // 優先從環境變數獲取金鑰
-  const apiKey = process.env.GEMINI_API_KEY;
-  
-  if (!apiKey) {
-    throw new Error("❌ 系統偵測不到 Gemini API Key。請確認環境變數設定，或稍後再試。");
+export const analyzeTranscript = async (
+  transcript: string, 
+  title: string, 
+  config: { 
+    provider: 'gemini' | 'openai', 
+    geminiKey?: string, 
+    openaiKey?: string 
   }
-
-  const ai = new GoogleGenAI({ apiKey });
+): Promise<{ summary: string, cards: Flashcard[] }> => {
+  console.log(`[VocabService] 階段 2: 正在使用 ${config.provider} 進行 AI 分析...`);
   
-  // 僅取前 8000 字以確保極速回應
   const truncatedTranscript = transcript.substring(0, 8000);
-
   const systemInstruction = `你是一位專精於 CEFR 分級的資深英語老師。
 請根據提供的逐字稿執行以下任務：
 1. 篩選準則：僅挑選符合 CEFR B2 到 C2 難度的核心單詞或片語。
@@ -82,41 +80,79 @@ export const analyzeTranscript = async (transcript: string, title: string): Prom
 3. 內容摘要：產生一段約 80 字的繁體中文內容摘要 (summary)。
 4. 每個單字包含：word, level (B2/C1/C2), definition (繁中), sentence (影片原句)。
 
-輸出規範：嚴格 JSON 格式。`;
+輸出規範：嚴格 JSON 格式。
+範例格式：
+{
+  "summary": "...",
+  "vocabulary": [
+    { "word": "...", "level": "...", "definition": "...", "sentence": "..." }
+  ]
+}`;
 
   const userPrompt = `影片標題：${title}\n逐字稿內容：\n---\n${truncatedTranscript}\n---`;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: userPrompt,
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json",
-      },
-    });
-
-    const content = response.text;
-    if (!content) throw new Error("AI 分析失敗。");
-
-    const result = JSON.parse(content);
-    
-    const cards: Flashcard[] = result.vocabulary.map((v: any, index: number) => ({
-      id: `card-${Date.now()}-${index}`,
-      word: v.word,
-      cefrLevel: v.level,
-      translation: v.definition,
-      example: v.sentence,
-      partOfSpeech: 'n/a',
-      status: 'new'
-    }));
-
-    return {
-      summary: result.summary,
-      cards
-    };
-  } catch (error: any) {
-    console.error("Gemini Error:", error);
-    throw new Error(`AI 分析失敗: ${error.message}`);
+  if (config.provider === 'openai') {
+    if (!config.openaiKey) {
+      throw new Error("❌ 尚未設定 OpenAI API Key。請點擊右上角「⚙️ 設定」填寫。");
+    }
+    const openai = new OpenAI({ apiKey: config.openaiKey, dangerouslyAllowBrowser: true });
+    try {
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemInstruction },
+          { role: "user", content: userPrompt }
+        ],
+        response_format: { type: "json_object" }
+      });
+      const content = completion.choices[0]?.message?.content;
+      if (!content) throw new Error("OpenAI 分析失敗。");
+      const result = JSON.parse(content);
+      return formatResult(result);
+    } catch (error: any) {
+      console.error("OpenAI Error:", error);
+      throw new Error(`OpenAI 分析失敗: ${error.message}`);
+    }
+  } else {
+    // Gemini
+    const apiKey = config.geminiKey || process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("❌ 尚未設定 Gemini API Key。請點擊右上角「⚙️ 設定」填寫。");
+    }
+    const ai = new GoogleGenAI({ apiKey });
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: userPrompt,
+        config: {
+          systemInstruction,
+          responseMimeType: "application/json",
+        },
+      });
+      const content = response.text;
+      if (!content) throw new Error("Gemini 分析失敗。");
+      const result = JSON.parse(content);
+      return formatResult(result);
+    } catch (error: any) {
+      console.error("Gemini Error:", error);
+      throw new Error(`Gemini 分析失敗: ${error.message}`);
+    }
   }
+};
+
+const formatResult = (result: any) => {
+  const cards: Flashcard[] = result.vocabulary.map((v: any, index: number) => ({
+    id: `card-${Date.now()}-${index}`,
+    word: v.word,
+    cefrLevel: v.level,
+    translation: v.definition,
+    example: v.sentence,
+    partOfSpeech: 'n/a',
+    status: 'new'
+  }));
+
+  return {
+    summary: result.summary,
+    cards
+  };
 };

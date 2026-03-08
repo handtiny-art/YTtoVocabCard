@@ -15,7 +15,15 @@ const App: React.FC = () => {
   });
 
   const [currentKey, setCurrentKey] = useState<string>(() => {
-    return localStorage.getItem('VOCAB_MASTER_GROQ_KEY') || '';
+    return localStorage.getItem('VOCAB_MASTER_GEMINI_KEY') || '';
+  });
+
+  const [openaiKey, setOpenaiKey] = useState<string>(() => {
+    return localStorage.getItem('VOCAB_MASTER_OPENAI_KEY') || '';
+  });
+
+  const [aiProvider, setAiProvider] = useState<'gemini' | 'openai'>(() => {
+    return (localStorage.getItem('VOCAB_MASTER_AI_PROVIDER') as 'gemini' | 'openai') || 'gemini';
   });
 
   const [supadataKey, setSupadataKey] = useState<string>(() => {
@@ -30,6 +38,7 @@ const App: React.FC = () => {
   
   const [showConfig, setShowConfig] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
+  const [openaiKeyInput, setOpenaiKeyInput] = useState('');
   const [supadataKeyInput, setSupadataKeyInput] = useState('');
   const [importText, setImportText] = useState('');
   const [isInitializing, setIsInitializing] = useState(true);
@@ -58,15 +67,22 @@ const App: React.FC = () => {
   const handleSaveKey = (e: React.FormEvent) => {
     e.preventDefault();
     const cleanGeminiKey = apiKeyInput.trim();
+    const cleanOpenaiKey = openaiKeyInput.trim();
     const cleanSupadataKey = supadataKeyInput.trim();
     
     let message = "";
 
     if (cleanGeminiKey) {
       setCurrentKey(cleanGeminiKey);
-      localStorage.setItem('VOCAB_MASTER_GROQ_KEY', cleanGeminiKey);
+      localStorage.setItem('VOCAB_MASTER_GEMINI_KEY', cleanGeminiKey);
       setApiKeyIntoGlobal(cleanGeminiKey);
-      message += "Groq API Key 已更新\n";
+      message += "Gemini API Key 已更新\n";
+    }
+
+    if (cleanOpenaiKey) {
+      setOpenaiKey(cleanOpenaiKey);
+      localStorage.setItem('VOCAB_MASTER_OPENAI_KEY', cleanOpenaiKey);
+      message += "OpenAI API Key 已更新\n";
     }
 
     if (cleanSupadataKey) {
@@ -78,6 +94,7 @@ const App: React.FC = () => {
     if (message) {
       alert(message + "儲存成功！");
       setApiKeyInput('');
+      setOpenaiKeyInput('');
       setSupadataKeyInput('');
     }
   };
@@ -95,7 +112,11 @@ const App: React.FC = () => {
       setLoadingStep('analyzing');
 
       // 階段 2: AI 分析
-      const { summary, cards } = await analyzeTranscript(transcript, detectedTitle);
+      const { summary, cards } = await analyzeTranscript(transcript, detectedTitle, {
+        provider: aiProvider,
+        geminiKey: currentKey,
+        openaiKey: openaiKey
+      });
 
       const newSet: VideoSet = {
         id: `set-${Date.now()}`,
@@ -250,20 +271,56 @@ const App: React.FC = () => {
               系統設定與數據中心
             </h3>
 
-            {/* AI 狀態區塊 */}
-            <div className="mb-8 p-5 bg-emerald-50 rounded-2xl border border-emerald-100">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                <span className="text-xs font-black text-emerald-700 uppercase tracking-wider">AI 狀態</span>
-              </div>
-              <p className="text-sm text-emerald-800 font-medium leading-relaxed">
-                已啟用 Gemini 3.1 Flash (免費版)。系統已自動配置，無需額外設定 AI 金鑰。
-              </p>
-            </div>
-
-            {/* API Key 區塊 */}
+            {/* AI 狀態與金鑰區塊 */}
             <div className="mb-10 space-y-6">
+              <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl mb-6">
+                <button 
+                  onClick={() => {
+                    setAiProvider('gemini');
+                    localStorage.setItem('VOCAB_MASTER_AI_PROVIDER', 'gemini');
+                  }}
+                  className={`flex-1 py-3 rounded-xl font-black text-xs transition-all ${aiProvider === 'gemini' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400'}`}
+                >
+                  Gemini (預設)
+                </button>
+                <button 
+                  onClick={() => {
+                    setAiProvider('openai');
+                    localStorage.setItem('VOCAB_MASTER_AI_PROVIDER', 'openai');
+                  }}
+                  className={`flex-1 py-3 rounded-xl font-black text-xs transition-all ${aiProvider === 'openai' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
+                >
+                  ChatGPT (GPT-4o)
+                </button>
+              </div>
+
               <form onSubmit={handleSaveKey} className="space-y-6">
+                {aiProvider === 'gemini' ? (
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Gemini API 金鑰</label>
+                    <input 
+                      type="password"
+                      placeholder={currentKey ? "••••••••••••••••" : "貼上 Gemini API Key..."}
+                      value={apiKeyInput}
+                      onChange={(e) => setApiKeyInput(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 mb-2"
+                    />
+                    <p className="text-[10px] text-slate-400 ml-1">註：若留空則使用系統預設免費額度。請至 <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-emerald-500 underline font-bold">AI Studio</a> 申請</p>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">OpenAI API 金鑰 (ChatGPT)</label>
+                    <input 
+                      type="password"
+                      placeholder={openaiKey ? "••••••••••••••••" : "貼上 OpenAI API Key..."}
+                      value={openaiKeyInput}
+                      onChange={(e) => setOpenaiKeyInput(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+                    />
+                    <p className="text-[10px] text-slate-400 ml-1">註：使用 ChatGPT 需要填寫您自己的 API Key。請至 <a href="https://platform.openai.com/api-keys" target="_blank" className="text-blue-500 underline font-bold">OpenAI Platform</a> 申請</p>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Supadata API 金鑰 (獲取影片內容)</label>
                   <input 
