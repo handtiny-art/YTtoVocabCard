@@ -85,12 +85,6 @@ const App: React.FC = () => {
   const [loadingStep, setLoadingStep] = useState<'idle' | 'fetching' | 'analyzing'>('idle');
 
   const handleProcessVideo = async (url: string) => {
-    if (!currentKey) {
-      alert("⚠️ 請先設定 Groq API Key。");
-      setShowConfig(true);
-      return;
-    }
-    
     setIsLoading(true);
     setLoadingStep('fetching');
 
@@ -252,38 +246,37 @@ const App: React.FC = () => {
             <button onClick={() => setShowConfig(false)} className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 bg-slate-100 w-10 h-10 rounded-full flex items-center justify-center transition-all">✕</button>
             
             <h3 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-3">
-              <span className="w-10 h-10 bg-indigo-600 text-white rounded-2xl flex items-center justify-center text-sm italic">VM</span>
-              設定與數據中心
+              <span className="w-10 h-10 bg-emerald-600 text-white rounded-2xl flex items-center justify-center text-sm italic">VM</span>
+              系統設定與數據中心
             </h3>
+
+            {/* AI 狀態區塊 */}
+            <div className="mb-8 p-5 bg-emerald-50 rounded-2xl border border-emerald-100">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                <span className="text-xs font-black text-emerald-700 uppercase tracking-wider">AI 狀態</span>
+              </div>
+              <p className="text-sm text-emerald-800 font-medium leading-relaxed">
+                已啟用 Gemini 3.1 Flash (免費版)。系統已自動配置，無需額外設定 AI 金鑰。
+              </p>
+            </div>
 
             {/* API Key 區塊 */}
             <div className="mb-10 space-y-6">
               <form onSubmit={handleSaveKey} className="space-y-6">
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Groq API 金鑰</label>
-                  <input 
-                    type="password"
-                    placeholder={currentKey ? "••••••••••••••••" : "貼上 Groq API Key..."}
-                    value={apiKeyInput}
-                    onChange={(e) => setApiKeyInput(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 mb-2"
-                  />
-                  <p className="text-[10px] text-slate-400 ml-1">註：請至 <a href="https://console.groq.com" target="_blank" className="text-indigo-500 underline">console.groq.com</a> 申請免費 Key</p>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Supadata API 金鑰 (抓字幕用)</label>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Supadata API 金鑰 (獲取影片內容)</label>
                   <input 
                     type="password"
                     placeholder={supadataKey ? "••••••••••••••••" : "貼上 Supadata API Key..."}
                     value={supadataKeyInput}
                     onChange={(e) => setSupadataKeyInput(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 mb-2"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 mb-2"
                   />
-                  <p className="text-[10px] text-slate-400 ml-1">註：請至 <a href="https://supadata.ai" target="_blank" className="text-indigo-500 underline">supadata.ai</a> 申請免費 Key</p>
+                  <p className="text-[10px] text-slate-400 ml-1">註：請至 <a href="https://supadata.ai" target="_blank" className="text-emerald-500 underline font-bold">supadata.ai</a> 申請免費 Key</p>
                 </div>
 
-                <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold active:scale-95 transition-all shadow-lg shadow-slate-100">儲存所有設定</button>
+                <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold active:scale-95 transition-all shadow-lg shadow-slate-100">儲存設定</button>
               </form>
             </div>
 
