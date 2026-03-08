@@ -76,7 +76,7 @@ export const analyzeTranscript = async (
   const systemInstruction = `你是一位專精於 CEFR 分級的資深英語老師。
 請根據提供的逐字稿執行以下任務：
 1. 篩選準則：僅挑選符合 CEFR B2 到 C2 難度的核心單詞或片語。
-2. 數量限制：精選 5-8 個最具代表性的進階詞彙。
+2. 數量要求：請盡可能找出所有符合難度要求的進階詞彙，不要限制數量。
 3. 內容摘要：產生一段約 80 字的繁體中文內容摘要 (summary)。
 4. 每個單字包含：word, level (B2/C1/C2), definition (繁中), sentence (影片原句)。
 

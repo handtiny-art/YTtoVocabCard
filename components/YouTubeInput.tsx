@@ -22,7 +22,7 @@ const YouTubeInput: React.FC<YouTubeInputProps> = ({ onProcess, isLoading, loadi
     if (loadingStep === 'fetching') return "正在抓取影片逐字稿...";
     if (loadingStep === 'analyzing') {
       const aiName = aiProvider === 'gemini' ? 'Gemini' : 'ChatGPT';
-      return `正在使用 ${aiName} 精選單字...`;
+      return `正在使用 ${aiName} 掃描所有進階單字...`;
     }
     return "AI 正在分析...";
   };
