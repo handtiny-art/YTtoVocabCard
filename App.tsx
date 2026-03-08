@@ -82,33 +82,37 @@ const App: React.FC = () => {
     }
   };
 
+  const [loadingStep, setLoadingStep] = useState<'idle' | 'fetching' | 'analyzing'>('idle');
+
   const handleProcessVideo = async (url: string) => {
     if (!currentKey) {
-      alert("⚠️ 偵測到尚未設定 Groq API 金鑰。\n\n由於發佈環境與開發環境的金鑰不共用，請點擊右上角「⚙️ 設定」重新貼上您的 Groq API Key。");
+      alert("⚠️ 請先設定 Groq API Key。");
       setShowConfig(true);
       return;
     }
     
-    if (!supadataKey) {
-      const proceed = confirm("⚠️ 您尚未設定 Supadata API 金鑰，這會導致 AI 無法獲取真實逐字稿而產生錯誤內容。\n\n建議先前往「⚙️ 設定」填寫 Supadata Key。是否仍要繼續（AI 將嘗試盲猜內容）？");
-      if (!proceed) {
-        setShowConfig(true);
-        return;
-      }
-    }
-
     setIsLoading(true);
+    setLoadingStep('fetching');
+
     try {
-      const { transcript, cards, detectedTitle, sources } = await extractVocabFromVideo(url, supadataKey);
+      // 階段 1: 獲取逐字稿
+      const { transcript, detectedTitle } = await fetchTranscript(url, supadataKey);
+      
+      setLoadingStep('analyzing');
+
+      // 階段 2: AI 分析
+      const { summary, cards } = await analyzeTranscript(transcript, detectedTitle);
+
       const newSet: VideoSet = {
         id: `set-${Date.now()}`,
         url,
-        title: detectedTitle || `單字集 - ${new Date().toLocaleDateString()}`,
-        transcript,
+        title: detectedTitle,
+        transcript: summary,
         cards,
-        sources,
+        sources: [],
         createdAt: Date.now()
       };
+
       setVideoSets(prev => [newSet, ...prev]);
       setCurrentSetId(newSet.id);
       setView('setDetail');
@@ -116,6 +120,7 @@ const App: React.FC = () => {
       alert(error.message);
     } finally {
       setIsLoading(false);
+      setLoadingStep('idle');
     }
   };
 
@@ -339,7 +344,7 @@ const App: React.FC = () => {
       <main className="max-w-4xl mx-auto">
         {view === 'home' && (
           <div className="space-y-12">
-            <YouTubeInput onProcess={handleProcessVideo} isLoading={isLoading} />
+            <YouTubeInput onProcess={handleProcessVideo} isLoading={isLoading} loadingStep={loadingStep} />
             <div className="space-y-4">
               <h2 className="text-xl font-bold text-slate-800">我的單字收藏 ({videoSets.length})</h2>
               {videoSets.length === 0 ? (

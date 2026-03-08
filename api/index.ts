@@ -49,7 +49,7 @@ async function createServer() {
         throw new Error("無法取得影片逐字稿，請確認影片是否有字幕。");
       }
 
-      const fullText = transcriptData.content.map(item => item.text).join(' ');
+      const fullText = transcriptData.content.map(item => item.text).join(' ').substring(0, 10000);
       
       let title = "YouTube Video";
       if (oEmbedResponse && oEmbedResponse.ok) {
