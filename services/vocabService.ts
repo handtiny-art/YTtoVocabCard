@@ -58,12 +58,19 @@ export const fetchTranscript = async (url: string, supadataKey?: string): Promis
 };
 
 /**
- * 第二階段：使用 Gemini 3.1 Flash 進行分析 (更穩定且支援長文本)
+ * 第二階段：使用 Gemini 進行分析
  */
 export const analyzeTranscript = async (transcript: string, title: string): Promise<{ summary: string, cards: Flashcard[] }> => {
   console.log("[VocabService] 階段 2: 正在使用 Gemini 進行 AI 分析...");
   
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  // 優先從環境變數獲取金鑰
+  const apiKey = process.env.GEMINI_API_KEY;
+  
+  if (!apiKey) {
+    throw new Error("❌ 系統偵測不到 Gemini API Key。請確認環境變數設定，或稍後再試。");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
   
   // 僅取前 8000 字以確保極速回應
   const truncatedTranscript = transcript.substring(0, 8000);
@@ -81,7 +88,7 @@ export const analyzeTranscript = async (transcript: string, title: string): Prom
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3.1-flash-lite-preview",
+      model: "gemini-3-flash-preview",
       contents: userPrompt,
       config: {
         systemInstruction,
