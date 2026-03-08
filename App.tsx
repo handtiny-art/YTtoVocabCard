@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Flashcard, VideoSet } from './types';
 import YouTubeInput from './components/YouTubeInput';
 import FlashcardItem from './components/FlashcardItem';
-import { extractVocabFromVideo } from './services/vocabService';
+import { fetchTranscript, analyzeTranscript } from './services/vocabService';
 
 const App: React.FC = () => {
   const [videoSets, setVideoSets] = useState<VideoSet[]>(() => {
