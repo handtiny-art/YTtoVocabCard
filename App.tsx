@@ -37,9 +37,12 @@ const App: React.FC = () => {
   const [view, setView] = useState<'home' | 'setDetail' | 'learning' | 'summary'>('home');
   
   const [showConfig, setShowConfig] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState('');
-  const [openaiKeyInput, setOpenaiKeyInput] = useState('');
-  const [supadataKeyInput, setSupadataKeyInput] = useState('');
+  const [apiKeyInput, setApiKeyInput] = useState(() => localStorage.getItem('VOCAB_MASTER_GEMINI_KEY') || '');
+  const [openaiKeyInput, setOpenaiKeyInput] = useState(() => localStorage.getItem('VOCAB_MASTER_OPENAI_KEY') || '');
+  const [supadataKeyInput, setSupadataKeyInput] = useState(() => localStorage.getItem('VOCAB_MASTER_SUPADATA_KEY') || '');
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [showOpenaiKey, setShowOpenaiKey] = useState(false);
+  const [showSupadataKey, setShowSupadataKey] = useState(false);
   const [importText, setImportText] = useState('');
   const [isInitializing, setIsInitializing] = useState(true);
 
@@ -72,20 +75,23 @@ const App: React.FC = () => {
     
     let message = "";
 
-    if (cleanGeminiKey) {
+    // Gemini Key
+    if (cleanGeminiKey !== currentKey) {
       setCurrentKey(cleanGeminiKey);
       localStorage.setItem('VOCAB_MASTER_GEMINI_KEY', cleanGeminiKey);
       setApiKeyIntoGlobal(cleanGeminiKey);
       message += "Gemini API Key 已更新\n";
     }
 
-    if (cleanOpenaiKey) {
+    // OpenAI Key
+    if (cleanOpenaiKey !== openaiKey) {
       setOpenaiKey(cleanOpenaiKey);
       localStorage.setItem('VOCAB_MASTER_OPENAI_KEY', cleanOpenaiKey);
       message += "OpenAI API Key 已更新\n";
     }
 
-    if (cleanSupadataKey) {
+    // Supadata Key
+    if (cleanSupadataKey !== supadataKey) {
       setSupadataKey(cleanSupadataKey);
       localStorage.setItem('VOCAB_MASTER_SUPADATA_KEY', cleanSupadataKey);
       message += "Supadata API Key 已更新\n";
@@ -93,9 +99,6 @@ const App: React.FC = () => {
 
     if (message) {
       alert(message + "儲存成功！");
-      setApiKeyInput('');
-      setOpenaiKeyInput('');
-      setSupadataKeyInput('');
     }
   };
 
@@ -298,39 +301,66 @@ const App: React.FC = () => {
                 {aiProvider === 'gemini' ? (
                   <div>
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Gemini API 金鑰</label>
-                    <input 
-                      type="password"
-                      placeholder={currentKey ? "••••••••••••••••" : "貼上 Gemini API Key..."}
-                      value={apiKeyInput}
-                      onChange={(e) => setApiKeyInput(e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 mb-2"
-                    />
-                    <p className="text-[10px] text-slate-400 ml-1">註：若留空則使用系統預設免費額度。請至 <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-emerald-500 underline font-bold">AI Studio</a> 申請</p>
+                    <div className="relative">
+                      <input 
+                        type={showApiKey ? "text" : "password"}
+                        placeholder="貼上 Gemini API Key..."
+                        value={apiKeyInput}
+                        onChange={(e) => setApiKeyInput(e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 pr-12"
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => setShowApiKey(!showApiKey)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        {showApiKey ? "👁️" : "👁️‍🗨️"}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-[10px] text-slate-400 ml-1">註：若留空則使用系統預設免費額度。請至 <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-emerald-500 underline font-bold">AI Studio</a> 申請</p>
                   </div>
                 ) : (
                   <div>
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">OpenAI API 金鑰 (ChatGPT)</label>
-                    <input 
-                      type="password"
-                      placeholder={openaiKey ? "••••••••••••••••" : "貼上 OpenAI API Key..."}
-                      value={openaiKeyInput}
-                      onChange={(e) => setOpenaiKeyInput(e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 mb-2"
-                    />
-                    <p className="text-[10px] text-slate-400 ml-1">註：使用 ChatGPT 需要填寫您自己的 API Key。請至 <a href="https://platform.openai.com/api-keys" target="_blank" className="text-blue-500 underline font-bold">OpenAI Platform</a> 申請</p>
+                    <div className="relative">
+                      <input 
+                        type={showOpenaiKey ? "text" : "password"}
+                        placeholder="貼上 OpenAI API Key..."
+                        value={openaiKeyInput}
+                        onChange={(e) => setOpenaiKeyInput(e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 pr-12"
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => setShowOpenaiKey(!showOpenaiKey)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        {showOpenaiKey ? "👁️" : "👁️‍🗨️"}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-[10px] text-slate-400 ml-1">註：使用 ChatGPT 需要填寫您自己的 API Key。請至 <a href="https://platform.openai.com/api-keys" target="_blank" className="text-blue-500 underline font-bold">OpenAI Platform</a> 申請</p>
                   </div>
                 )}
 
                 <div>
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Supadata API 金鑰 (獲取影片內容)</label>
-                  <input 
-                    type="password"
-                    placeholder={supadataKey ? "••••••••••••••••" : "貼上 Supadata API Key..."}
-                    value={supadataKeyInput}
-                    onChange={(e) => setSupadataKeyInput(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 mb-2"
-                  />
-                  <p className="text-[10px] text-slate-400 ml-1">註：請至 <a href="https://supadata.ai" target="_blank" className="text-emerald-500 underline font-bold">supadata.ai</a> 申請免費 Key</p>
+                  <div className="relative">
+                    <input 
+                      type={showSupadataKey ? "text" : "password"}
+                      placeholder="貼上 Supadata API Key..."
+                      value={supadataKeyInput}
+                      onChange={(e) => setSupadataKeyInput(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 pr-12"
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => setShowSupadataKey(!showSupadataKey)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {showSupadataKey ? "👁️" : "👁️‍🗨️"}
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[10px] text-slate-400 ml-1">註：請至 <a href="https://supadata.ai" target="_blank" className="text-emerald-500 underline font-bold">supadata.ai</a> 申請免費 Key</p>
                 </div>
 
                 <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold active:scale-95 transition-all shadow-lg shadow-slate-100">儲存設定</button>
@@ -394,7 +424,7 @@ const App: React.FC = () => {
       <main className="max-w-4xl mx-auto">
         {view === 'home' && (
           <div className="space-y-12">
-            <YouTubeInput onProcess={handleProcessVideo} isLoading={isLoading} loadingStep={loadingStep} />
+            <YouTubeInput onProcess={handleProcessVideo} isLoading={isLoading} loadingStep={loadingStep} aiProvider={aiProvider} />
             <div className="space-y-4">
               <h2 className="text-xl font-bold text-slate-800">我的單字收藏 ({videoSets.length})</h2>
               {videoSets.length === 0 ? (

@@ -5,9 +5,10 @@ interface YouTubeInputProps {
   onProcess: (url: string) => void;
   isLoading: boolean;
   loadingStep: 'idle' | 'fetching' | 'analyzing';
+  aiProvider: 'gemini' | 'openai';
 }
 
-const YouTubeInput: React.FC<YouTubeInputProps> = ({ onProcess, isLoading, loadingStep }) => {
+const YouTubeInput: React.FC<YouTubeInputProps> = ({ onProcess, isLoading, loadingStep, aiProvider }) => {
   const [url, setUrl] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -19,7 +20,10 @@ const YouTubeInput: React.FC<YouTubeInputProps> = ({ onProcess, isLoading, loadi
 
   const getLoadingMessage = () => {
     if (loadingStep === 'fetching') return "正在抓取影片逐字稿...";
-    if (loadingStep === 'analyzing') return "正在精選 5-10 個核心單字 (AI 分析中)...";
+    if (loadingStep === 'analyzing') {
+      const aiName = aiProvider === 'gemini' ? 'Gemini' : 'ChatGPT';
+      return `正在使用 ${aiName} 精選單字...`;
+    }
     return "AI 正在分析...";
   };
 
@@ -28,19 +32,23 @@ const YouTubeInput: React.FC<YouTubeInputProps> = ({ onProcess, isLoading, loadi
       <div className="absolute top-0 right-0 -mr-16 -mt-16 w-32 h-32 bg-slate-50 rounded-full opacity-50 blur-3xl"></div>
       
       <form onSubmit={handleSubmit} className="relative z-10 space-y-6">
-        <div>
+        <div className="flex justify-between items-end">
           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">
             輸入 YouTube 影片連結
           </label>
-          <input
-            type="text"
-            placeholder="在此貼上 YouTube 網址..."
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            disabled={isLoading}
-            className="w-full px-6 py-5 bg-slate-50 rounded-2xl border-2 border-transparent focus:bg-white focus:border-slate-900 outline-none transition-all disabled:opacity-50 text-slate-700 font-medium text-lg"
-          />
+          <div className={`mb-3 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter flex items-center gap-1.5 ${aiProvider === 'gemini' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
+            <div className={`w-1.5 h-1.5 rounded-full ${aiProvider === 'gemini' ? 'bg-emerald-500' : 'bg-blue-500'} animate-pulse`}></div>
+            {aiProvider === 'gemini' ? 'Gemini Active' : 'ChatGPT Active'}
+          </div>
         </div>
+        <input
+          type="text"
+          placeholder="在此貼上 YouTube 網址..."
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          disabled={isLoading}
+          className="w-full px-6 py-5 bg-slate-50 rounded-2xl border-2 border-transparent focus:bg-white focus:border-slate-900 outline-none transition-all disabled:opacity-50 text-slate-700 font-medium text-lg"
+        />
 
         <button
           type="submit"
