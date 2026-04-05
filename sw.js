@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'vocab-master-v8'; // 更新版本號以清除舊快取
+const CACHE_NAME = 'yt-to-vocab-v1'; // 更新版本號以清除舊快取
 
 const ASSETS = [
   './',

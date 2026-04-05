@@ -270,8 +270,8 @@ const App: React.FC = () => {
             <button onClick={() => setShowConfig(false)} className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 bg-slate-100 w-10 h-10 rounded-full flex items-center justify-center transition-all">✕</button>
             
             <h3 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-3">
-              <span className="w-10 h-10 bg-emerald-600 text-white rounded-2xl flex items-center justify-center text-sm italic">VM</span>
-              系統設定與數據中心
+              <span className="w-10 h-10 bg-emerald-600 text-white rounded-2xl flex items-center justify-center text-sm italic">YT</span>
+              YTtoVocab 系統設定與數據中心
             </h3>
 
             {/* AI 狀態與金鑰區塊 */}
@@ -405,10 +405,10 @@ const App: React.FC = () => {
       <header className="max-w-4xl mx-auto mb-8 flex items-center justify-between">
         <div className="cursor-pointer" onClick={() => setView('home')}>
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-            <span className="text-indigo-600">Vocab</span>Master
+            YTtoVocab
           </h1>
           <div className="flex items-center gap-2">
-            <p className="text-slate-500 text-sm">影片單字大師</p>
+            <p className="text-slate-500 text-sm">YouTube 影片單字大師</p>
           </div>
         </div>
         

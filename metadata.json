@@ -1,5 +1,5 @@
 {
-  "name": "Youtube Vocab Master",
+  "name": "YTtoVocab",
   "description": "Transform any YouTube video into interactive English flashcards. Automatically extracts transcripts for high-accuracy vocabulary extraction and translation.",
   "requestFramePermissions": []
 }
