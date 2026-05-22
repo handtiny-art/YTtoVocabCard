@@ -8,6 +8,7 @@ export interface Flashcard {
   phonetic?: string;
   cefrLevel?: string;
   status: 'new' | 'learning' | 'learned';
+  englishDefinition?: string;
 }
 
 export interface GroundingSource {

@@ -1,65 +1,84 @@
 
-import { GoogleGenAI } from "@google/genai";
-import OpenAI from "openai";
 import { Flashcard, GroundingSource } from "../types";
 
 /**
- * 第一階段：從前端直接呼叫 Supadata (避開 Vercel 10s 限制)
+ * 第一階段：獲取 YouTube 逐字稿 (支援前端直接與後端 Proxy 代理自適應切換)
  */
 export const fetchTranscript = async (url: string, supadataKey?: string): Promise<{ transcript: string, detectedTitle: string, videoId: string }> => {
-  console.log("[VocabService] 階段 1: 正在從瀏覽器直接獲取逐字稿...");
+  console.log("[VocabService] 階段 1: 正在自適應獲取逐字稿 (自動選擇前端或後端模式)...");
   
-  if (!supadataKey) {
-    throw new Error("❌ 尚未設定 Supadata API Key。請點擊右上角「⚙️ 設定」填寫。");
-  }
-
   const videoIdMatch = url.match(/(?:v=|\/)([0-9A-Za-z_-]{11}).*/);
   const videoId = videoIdMatch ? videoIdMatch[1] : url;
 
-  try {
-    // 1. 獲取標題 (使用 YouTube 公開的 oEmbed API，無 CORS 問題)
-    const oEmbedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
-    const titleRes = await fetch(oEmbedUrl).catch(() => null);
-    let detectedTitle = "YouTube Video";
-    if (titleRes && titleRes.ok) {
-      const titleData = await titleRes.json();
-      detectedTitle = titleData.title;
-    }
-
-    // 2. 獲取逐字稿 (直接呼叫 Supadata)
-    const response = await fetch(`https://api.supadata.ai/v1/youtube/transcript?url=${encodeURIComponent(url)}`, {
-      method: 'GET',
-      headers: {
-        'x-api-key': supadataKey,
-        'Accept': 'application/json'
+  // 1. 若前端有設定 Supadata 密鑰，先嘗試在前端進行直連，確保最大吞吐
+  if (supadataKey) {
+    try {
+      const oEmbedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+      const titleRes = await fetch(oEmbedUrl).catch(() => null);
+      let detectedTitle = "YouTube Video";
+      if (titleRes && titleRes.ok) {
+        const titleData = await titleRes.json();
+        detectedTitle = titleData.title;
       }
-    });
 
+      const response = await fetch(`https://api.supadata.ai/v1/youtube/transcript?url=${encodeURIComponent(url)}`, {
+        method: 'GET',
+        headers: {
+          'x-api-key': supadataKey,
+          'Accept': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.content && Array.isArray(data.content)) {
+          const fullText = data.content.map((item: any) => item.text).join(' ');
+          return {
+            transcript: fullText,
+            detectedTitle,
+            videoId
+          };
+        }
+      }
+    } catch (e) {
+      console.warn("直接在前端呼叫 Supadata 失敗，自適應切換至後端 proxy...", e);
+    }
+  }
+
+  // 2. 使用後端 proxy (無痛引導伺服器層級 env variables，不強迫使用者自行填入 API Key)
+  console.log("[VocabService] 正在使用後端 proxy 載入影片資料...");
+  try {
+    const backendUrl = `/api/transcript?url=${encodeURIComponent(url)}`;
+    const headers: Record<string, string> = {};
+    if (supadataKey) {
+      headers['x-supadata-key'] = supadataKey;
+    }
+    
+    const response = await fetch(backendUrl, { headers });
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Supadata 錯誤: ${errorText || response.statusText}`);
+      let errorMsg = errorText;
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMsg = errorJson.error || errorText;
+      } catch (e) {}
+      throw new Error(errorMsg);
     }
 
     const data = await response.json();
-    if (!data.content || !Array.isArray(data.content)) {
-      throw new Error("無法取得影片逐字稿內容。");
-    }
-
-    const fullText = data.content.map((item: any) => item.text).join(' ');
-
     return {
-      transcript: fullText,
-      detectedTitle,
-      videoId
+      transcript: data.transcript,
+      detectedTitle: data.title,
+      videoId: data.videoId || videoId
     };
   } catch (error: any) {
-    console.error("Fetch error:", error);
-    throw new Error(`獲取影片內容失敗: ${error.message || "網路連線異常"}`);
+    console.error("Fetch transcript error:", error);
+    throw new Error(`獲取影片內容失敗: ${error.message || "處理網路請求發生異常"}`);
   }
 };
 
 /**
- * 第二階段：使用 AI 進行分析
+ * 第二階段：使用 AI 進行分析 (一律導向安全後端 api)
  */
 export const analyzeTranscript = async (
   transcript: string, 
@@ -70,86 +89,76 @@ export const analyzeTranscript = async (
     openaiKey?: string 
   }
 ): Promise<{ summary: string, cards: Flashcard[] }> => {
-  console.log(`[VocabService] 階段 2: 正在使用 ${config.provider} 進行 AI 分析...`);
-  
-  const truncatedTranscript = transcript.substring(0, 8000);
-  const systemInstruction = `你是一位專精於 CEFR 分級的資深英語老師。
-請根據提供的逐字稿執行以下任務：
-1. 篩選準則：僅挑選符合 CEFR B2 到 C2 難度的核心單詞或片語。
-2. 數量要求：請盡可能找出所有符合難度要求的進階詞彙，不要限制數量。
-3. 內容摘要：產生一段約 80 字的繁體中文內容摘要 (summary)。
-4. 每個單字包含：word, level (B2/C1/C2), definition (繁中), sentence (影片原句)。
+  console.log(`[VocabService] 階段 2: 正在透過後端 API 執行 ${config.provider} AI 分析...`);
 
-輸出規範：嚴格 JSON 格式。
-範例格式：
-{
-  "summary": "...",
-  "vocabulary": [
-    { "word": "...", "level": "...", "definition": "...", "sentence": "..." }
-  ]
-}`;
+  try {
+    const response = await fetch("/api/analyze", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        transcript,
+        title,
+        provider: config.provider,
+        geminiKey: config.geminiKey,
+        openaiKey: config.openaiKey
+      })
+    });
 
-  const userPrompt = `影片標題：${title}\n逐字稿內容：\n---\n${truncatedTranscript}\n---`;
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorMsg = errorText;
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMsg = errorJson.error || errorText;
+      } catch (jsonErr) {}
+      throw new Error(errorMsg);
+    }
 
-  if (config.provider === 'openai') {
-    if (!config.openaiKey) {
-      throw new Error("❌ 尚未設定 OpenAI API Key。請點擊右上角「⚙️ 設定」填寫。");
-    }
-    const openai = new OpenAI({ apiKey: config.openaiKey, dangerouslyAllowBrowser: true });
-    try {
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: systemInstruction },
-          { role: "user", content: userPrompt }
-        ],
-        response_format: { type: "json_object" }
-      });
-      const content = completion.choices[0]?.message?.content;
-      if (!content) throw new Error("OpenAI 分析失敗。");
-      const result = JSON.parse(content);
-      return formatResult(result);
-    } catch (error: any) {
-      console.error("OpenAI Error:", error);
-      throw new Error(`OpenAI 分析失敗: ${error.message}`);
-    }
-  } else {
-    // Gemini
-    const apiKey = config.geminiKey || process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("❌ 尚未設定 Gemini API Key。請點擊右上角「⚙️ 設定」填寫。");
-    }
-    const ai = new GoogleGenAI({ apiKey });
-    try {
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: userPrompt,
-        config: {
-          systemInstruction,
-          responseMimeType: "application/json",
-        },
-      });
-      const content = response.text;
-      if (!content) throw new Error("Gemini 分析失敗。");
-      const result = JSON.parse(content);
-      return formatResult(result);
-    } catch (error: any) {
-      console.error("Gemini Error:", error);
-      throw new Error(`Gemini 分析失敗: ${error.message}`);
-    }
+    const result = await response.json();
+    return formatResult(result);
+  } catch (error: any) {
+    console.error("AI analyze error:", error);
+    throw new Error(`產生單字卡失敗: ${error.message || "伺服器處理 AI 生成請求異常"}`);
   }
 };
 
 const formatResult = (result: any) => {
-  const cards: Flashcard[] = result.vocabulary.map((v: any, index: number) => ({
-    id: `card-${Date.now()}-${index}`,
-    word: v.word,
-    cefrLevel: v.level,
-    translation: v.definition,
-    example: v.sentence,
-    partOfSpeech: 'n/a',
-    status: 'new'
-  }));
+  const cards: Flashcard[] = result.vocabulary.map((v: any, index: number) => {
+    // 1. 取得英文解釋 (支援多種常見欄位命名的命名變體)
+    const englishDefinition = 
+      v.english_definition || 
+      v.englishDefinition || 
+      v.definition_en || 
+      v.definitionEn || 
+      v.english_desc || 
+      v.english_meaning || 
+      '';
+
+    // 2. 取得中文翻譯 (支援英文解釋跟中文翻譯共用/錯置或不同命名規格的分流)
+    const translation = 
+      v.chinese_translation || 
+      v.chineseTranslation || 
+      v.translation_zh || 
+      v.translationZh || 
+      v.translation || 
+      v.definition_zh || 
+      v.definitionZh || 
+      v.definition || 
+      '';
+
+    return {
+      id: `card-${Date.now()}-${index}`,
+      word: v.word || '',
+      cefrLevel: v.level || 'B2',
+      translation: translation,
+      englishDefinition: englishDefinition,
+      example: v.sentence || v.example || '',
+      partOfSpeech: v.partOfSpeech || v.pos || 'n/a',
+      status: 'new'
+    };
+  });
 
   return {
     summary: result.summary,

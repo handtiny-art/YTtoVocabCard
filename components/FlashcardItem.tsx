@@ -89,7 +89,21 @@ const FlashcardItem: React.FC<FlashcardItemProps> = ({ card, onSwipeRight, onSwi
                   </span>
                 )}
               </div>
-              <h2 className="text-3xl font-bold text-white mb-2">{card.translation}</h2>
+              {card.englishDefinition ? (
+                <div className="mb-4">
+                  <p className="text-white/80 text-xs font-black uppercase tracking-widest mb-1.5">Definition</p>
+                  <p className="text-white text-base font-semibold leading-relaxed max-w-[280px] text-center mx-auto mb-3">
+                    {card.englishDefinition}
+                  </p>
+                  <div className="w-12 h-px bg-white/20 mx-auto my-3" />
+                  <p className="text-white/80 text-xs font-black uppercase tracking-widest mb-1">Translation</p>
+                  <h2 className="text-2xl font-black text-white text-center">{card.translation}</h2>
+                </div>
+              ) : (
+                <>
+                  <h2 className="text-3xl font-bold text-white mb-2">{card.translation}</h2>
+                </>
+              )}
               {card.phonetic && <p className="text-white/60 font-mono text-xs">{card.phonetic}</p>}
             </div>
             

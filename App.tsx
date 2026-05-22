@@ -47,7 +47,78 @@ const App: React.FC = () => {
   const [isInitializing, setIsInitializing] = useState(true);
 
   const [showManualForm, setShowManualForm] = useState(false);
-  const [manualWord, setManualWord] = useState({ word: '', pos: 'n.', trans: '', example: '' });
+  const [manualWord, setManualWord] = useState({ word: '', pos: 'n.', trans: '', example: '', englishDefinition: '' });
+
+  const [selectedCard, setSelectedCard] = useState<Flashcard | null>(null);
+  const [isEditingCard, setIsEditingCard] = useState(false);
+  const [editForm, setEditForm] = useState<Flashcard | null>(null);
+
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void;
+    isAlert?: boolean;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  const showCustomConfirm = (title: string, message: string, onConfirm: () => void, confirmText = "確定", cancelText = "取消") => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      confirmText,
+      cancelText,
+      onConfirm: () => {
+        onConfirm();
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+      },
+      isAlert: false
+    });
+  };
+
+  const showCustomAlert = (title: string, message: string, onConfirmAction?: () => void) => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      confirmText: "確定",
+      onConfirm: () => {
+        if (onConfirmAction) onConfirmAction();
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+      },
+      isAlert: true
+    });
+  };
+
+  const handleOpenCard = (card: Flashcard) => {
+    setSelectedCard(card);
+    setEditForm({ ...card });
+    setIsEditingCard(false);
+  };
+
+  const handleSaveCardEdit = () => {
+    if (!editForm || !currentSetId) return;
+    
+    setVideoSets(prev => prev.map(set => {
+      if (set.id === currentSetId) {
+        return {
+          ...set,
+          cards: set.cards.map(c => c.id === editForm.id ? editForm : c)
+        };
+      }
+      return set;
+    }));
+
+    setSelectedCard(editForm);
+    setIsEditingCard(false);
+  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -80,26 +151,29 @@ const App: React.FC = () => {
       setCurrentKey(cleanGeminiKey);
       localStorage.setItem('VOCAB_MASTER_GEMINI_KEY', cleanGeminiKey);
       setApiKeyIntoGlobal(cleanGeminiKey);
-      message += "Gemini API Key 已更新\n";
+      message += "Gemini API 金鑰已變更\n";
     }
 
     // OpenAI Key
     if (cleanOpenaiKey !== openaiKey) {
       setOpenaiKey(cleanOpenaiKey);
       localStorage.setItem('VOCAB_MASTER_OPENAI_KEY', cleanOpenaiKey);
-      message += "OpenAI API Key 已更新\n";
+      message += "OpenAI API 金鑰已變更\n";
     }
 
     // Supadata Key
     if (cleanSupadataKey !== supadataKey) {
       setSupadataKey(cleanSupadataKey);
       localStorage.setItem('VOCAB_MASTER_SUPADATA_KEY', cleanSupadataKey);
-      message += "Supadata API Key 已更新\n";
+      message += "Supadata API 金鑰已變更\n";
     }
 
-    if (message) {
-      alert(message + "儲存成功！");
-    }
+    // 關閉設定與數據中心彈窗
+    setShowConfig(false);
+
+    // 顯示自定義設定成功提示
+    const alertBody = message ? `${message}\n設定已成功儲存入瀏覽器本機快取！` : "設定已成功儲存！";
+    showCustomAlert("設定已儲存", alertBody);
   };
 
   const [loadingStep, setLoadingStep] = useState<'idle' | 'fetching' | 'analyzing'>('idle');
@@ -135,7 +209,7 @@ const App: React.FC = () => {
       setCurrentSetId(newSet.id);
       setView('setDetail');
     } catch (error: any) {
-      alert(error.message);
+      showCustomAlert("分析失敗", error.message || "未知錯誤，請確認影片網址或 API 金鑰。");
     } finally {
       setIsLoading(false);
       setLoadingStep('idle');
@@ -152,7 +226,8 @@ const App: React.FC = () => {
       partOfSpeech: manualWord.pos,
       translation: manualWord.trans,
       example: manualWord.example || '使用者手動新增的單字',
-      status: 'new'
+      status: 'new',
+      englishDefinition: manualWord.englishDefinition || ''
     };
 
     setVideoSets(prev => prev.map(set => {
@@ -162,7 +237,7 @@ const App: React.FC = () => {
       return set;
     }));
 
-    setManualWord({ word: '', pos: 'n.', trans: '', example: '' });
+    setManualWord({ word: '', pos: 'n.', trans: '', example: '', englishDefinition: '' });
     setShowManualForm(false);
   };
 
@@ -195,7 +270,10 @@ const App: React.FC = () => {
     if (!targetSet) return;
     let cardsToReview = targetSet.cards;
     if (mode === 'learning') cardsToReview = targetSet.cards.filter(c => c.status !== 'learned');
-    if (cardsToReview.length === 0) return alert("沒有需要學習的單字！");
+    if (cardsToReview.length === 0) {
+      showCustomAlert("學習提示", "沒有需要學習的單字！");
+      return;
+    }
     setCurrentSetId(setId);
     setActiveCards(cardsToReview);
     setCurrentIndex(0);
@@ -204,7 +282,31 @@ const App: React.FC = () => {
 
   const deleteSet = (e: React.MouseEvent, setId: string) => {
     e.stopPropagation();
-    if (confirm("確定要刪除此單字集嗎？")) setVideoSets(prev => prev.filter(s => s.id !== setId));
+    showCustomConfirm("刪除單字集", "確定要刪除此單字集嗎？這會一併清除該集的所有單字卡，且無法復原喔！", () => {
+      setVideoSets(prev => prev.filter(s => s.id !== setId));
+    });
+  };
+
+  const handleDeleteCard = (cardId: string, confirmRequired = true) => {
+    if (!currentSetId) return;
+    
+    const performDeletion = () => {
+      setVideoSets(prev => prev.map(set => {
+        if (set.id === currentSetId) {
+          return {
+            ...set,
+            cards: set.cards.filter(c => c.id !== cardId)
+          };
+        }
+        return set;
+      }));
+    };
+
+    if (confirmRequired) {
+      showCustomConfirm("刪除單字卡", "確定要刪除此單字卡嗎？", performDeletion);
+    } else {
+      performDeletion();
+    }
   };
 
   // 數據管理功能
@@ -220,7 +322,7 @@ const App: React.FC = () => {
   const copyDataToClipboard = () => {
     const dataStr = JSON.stringify(videoSets);
     navigator.clipboard.writeText(dataStr).then(() => {
-      alert("所有單字數據已複製到剪貼簿！您可以將其貼在記事本保存。");
+      showCustomAlert("複製成功", "所有單字數據已成功複製到剪貼簿！您可以將其貼在記事本中妥善保存。");
     });
   };
 
@@ -229,14 +331,14 @@ const App: React.FC = () => {
       const importedData = JSON.parse(importText.trim());
       if (Array.isArray(importedData)) {
         setVideoSets(importedData);
-        alert("還原成功！");
+        showCustomAlert("還原成功", "已成功從備份數據碼還原所有單字收藏！");
         setImportText('');
         setShowConfig(false);
       } else {
-        alert("格式不正確。");
+        showCustomAlert("格式不正確", "貼上的數據並非有效的單字集陣列，請重新確認。");
       }
     } catch (err) {
-      alert("無效的數據格式。");
+      showCustomAlert("格式錯誤", "無效的數據格式，請確認是否複製完整。");
     }
   };
 
@@ -249,10 +351,14 @@ const App: React.FC = () => {
         const importedData = JSON.parse(event.target?.result as string);
         if (Array.isArray(importedData)) {
           setVideoSets(importedData);
-          alert("還原成功！");
+          showCustomAlert("還原成功", "已成功從 JSON 備份檔案還原所有單字收藏！");
           setShowConfig(false);
+        } else {
+          showCustomAlert("還原失敗", "檔案內容結構不符，無法還原。");
         }
-      } catch (err) { alert("檔案讀取失敗。"); }
+      } catch (err) {
+        showCustomAlert("還原失敗", "檔案讀取或解析失敗，可能檔案已損壞。");
+      }
     };
     fileReader.readAsText(file);
   };
@@ -300,7 +406,7 @@ const App: React.FC = () => {
               <form onSubmit={handleSaveKey} className="space-y-6">
                 {aiProvider === 'gemini' ? (
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Gemini API 金鑰</label>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Gemini API 金鑰 (選填)</label>
                     <div className="relative">
                       <input 
                         type={showApiKey ? "text" : "password"}
@@ -317,11 +423,11 @@ const App: React.FC = () => {
                         {showApiKey ? "👁️" : "👁️‍🗨️"}
                       </button>
                     </div>
-                    <p className="mt-2 text-[10px] text-slate-400 ml-1">註：若留空則使用系統預設免費額度。請至 <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-emerald-500 underline font-bold">AI Studio</a> 申請</p>
+                    <p className="mt-2 text-[10px] text-slate-400 ml-1">註：若留空則使用系統預設免費額度此處為選填。請至 <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-emerald-500 underline font-bold">AI Studio</a> 申請</p>
                   </div>
                 ) : (
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">OpenAI API 金鑰 (ChatGPT)</label>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">OpenAI API 金鑰 (ChatGPT - 選填)</label>
                     <div className="relative">
                       <input 
                         type={showOpenaiKey ? "text" : "password"}
@@ -338,12 +444,12 @@ const App: React.FC = () => {
                         {showOpenaiKey ? "👁️" : "👁️‍🗨️"}
                       </button>
                     </div>
-                    <p className="mt-2 text-[10px] text-slate-400 ml-1">註：使用 ChatGPT 需要填寫您自己的 API Key。請至 <a href="https://platform.openai.com/api-keys" target="_blank" className="text-blue-500 underline font-bold">OpenAI Platform</a> 申請</p>
+                    <p className="mt-2 text-[10px] text-slate-400 ml-1">註：使用 ChatGPT 可以選填此 API Key，留空則嘗試以伺服器預設對接。請至 <a href="https://platform.openai.com/api-keys" target="_blank" className="text-blue-500 underline font-bold">OpenAI Platform</a> 申請</p>
                   </div>
                 )}
 
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Supadata API 金鑰 (獲取影片內容)</label>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Supadata API 金鑰 (獲取影片內容 - 選填)</label>
                   <div className="relative">
                     <input 
                       type={showSupadataKey ? "text" : "password"}
@@ -458,7 +564,7 @@ const App: React.FC = () => {
               <h2 className="text-2xl font-black text-slate-800 mb-3">{currentSet.title}</h2>
               <p className="text-slate-500 text-sm mb-10 leading-relaxed italic border-l-4 border-indigo-100 pl-4">"{currentSet.transcript}"</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button onClick={() => startLearning(currentSet.id, 'all')} className="py-5 bg-slate-900 text-white rounded-2xl font-black shadow-lg shadow-slate-200 active:scale-95 transition-all text-lg">全量複習</button>
+                <button onClick={() => startLearning(currentSet.id, 'all')} className="py-5 bg-slate-900 text-white rounded-2xl font-black shadow-lg shadow-slate-200 active:scale-95 transition-all text-lg">全部複習</button>
                 <button onClick={() => startLearning(currentSet.id, 'learning')} className="py-5 rounded-2xl font-black border-2 border-indigo-100 bg-white text-indigo-600 active:scale-95 transition-all text-lg">複習還在學</button>
               </div>
             </div>
@@ -491,6 +597,12 @@ const App: React.FC = () => {
                   </div>
                   <input 
                     className="w-full px-4 py-3 rounded-xl border border-indigo-100 outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="英文解釋/定義 (選填)"
+                    value={manualWord.englishDefinition}
+                    onChange={e => setManualWord({...manualWord, englishDefinition: e.target.value})}
+                  />
+                  <input 
+                    className="w-full px-4 py-3 rounded-xl border border-indigo-100 outline-none focus:ring-2 focus:ring-indigo-500"
                     placeholder="中文翻譯"
                     value={manualWord.trans}
                     onChange={e => setManualWord({...manualWord, trans: e.target.value})}
@@ -513,20 +625,49 @@ const App: React.FC = () => {
             
             <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm">
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8 ml-1">目前單字列表</h3>
-              <div className="divide-y divide-slate-50">
+              <div className="divide-y divide-slate-100">
                 {currentSet.cards.map(card => (
-                  <div key={card.id} className="py-5 flex justify-between items-center group">
+                  <div 
+                    key={card.id} 
+                    onClick={() => handleOpenCard(card)}
+                    className="py-4 px-4 -mx-4 rounded-2xl flex justify-between items-center group hover:bg-slate-50 transition-all cursor-pointer"
+                  >
                     <div>
                       <div className="flex items-center gap-3 mb-1">
-                        <span className="font-bold text-slate-800 text-xl">{card.word}</span>
-                        <span className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md font-black uppercase">{card.partOfSpeech}</span>
+                        <span className="font-bold text-slate-800 text-lg group-hover:text-indigo-600 transition-colors">{card.word}</span>
+                        {card.partOfSpeech && card.partOfSpeech !== 'n/a' && (
+                          <span className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md font-black uppercase">{card.partOfSpeech}</span>
+                        )}
+                        {card.cefrLevel && (
+                          <span className="text-[9px] px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded font-bold uppercase">{card.cefrLevel}</span>
+                        )}
                         {card.id.startsWith('manual-') && <span className="text-[8px] bg-indigo-100 text-indigo-500 px-1.5 py-0.5 rounded font-black uppercase tracking-tighter">自訂</span>}
                       </div>
-                      <p className="text-sm text-slate-500 font-medium">{card.translation}</p>
+                      <div className="flex flex-col gap-0.5">
+                        {card.englishDefinition && (
+                          <p className="text-xs text-slate-400 font-medium italic line-clamp-1">{card.englishDefinition}</p>
+                        )}
+                        <p className="text-sm text-slate-500 font-medium">{card.translation}</p>
+                      </div>
                     </div>
-                    <span className={`text-[10px] font-black uppercase px-3 py-1.5 rounded-full ${card.status === 'learned' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-300'}`}>
-                      {card.status === 'learned' ? '已學會' : '還在學'}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className={`text-[10px] font-black uppercase px-3 py-1.5 rounded-full ${card.status === 'learned' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-300'}`}>
+                        {card.status === 'learned' ? '已學會' : '還在學'}
+                      </span>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteCard(card.id);
+                        }}
+                        className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                        title="刪除此單字卡"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                      <span className="text-slate-300 group-hover:translate-x-1 group-hover:text-indigo-400 transition-all text-xs">➔</span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -551,12 +692,223 @@ const App: React.FC = () => {
             <div className="w-28 h-28 bg-slate-900 text-white rounded-[2rem] flex items-center justify-center text-5xl mx-auto mb-10 shadow-2xl transform -rotate-6">🏆</div>
             <h2 className="text-3xl font-black text-slate-800 mb-4 tracking-tight">練習結束！</h2>
             <p className="text-slate-500 mb-12 leading-relaxed font-medium text-lg">今天的努力，<br/>是明天實力的累積。</p>
-            <button onClick={() => setView('home')} className="w-full py-6 bg-slate-900 text-white rounded-2xl font-black text-xl shadow-xl shadow-slate-200 active:scale-95 transition-all">
-              回到主頁
+            <button onClick={() => setView('setDetail')} className="w-full py-6 bg-slate-900 text-white rounded-2xl font-black text-xl shadow-xl shadow-slate-200 active:scale-95 transition-all">
+              返回單字列表
             </button>
           </div>
         )}
       </main>
+
+      {/* 獨立單字卡詳細與編輯彈窗 */}
+      {selectedCard && editForm && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-8 shadow-2xl relative animate-in zoom-in duration-300 max-h-[90vh] overflow-y-auto">
+            <button 
+              onClick={() => { setSelectedCard(null); setEditForm(null); }} 
+              className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 bg-slate-100 w-10 h-10 rounded-full flex items-center justify-center transition-all"
+            >
+              ✕
+            </button>
+
+            {!isEditingCard ? (
+              /* 預覽視圖 */
+              <div className="space-y-6">
+                <div>
+                  <span className="text-[10px] uppercase font-black text-slate-400 tracking-[0.2em] block mb-2">單字內容</span>
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-3xl font-black text-slate-950">{selectedCard.word}</h2>
+                    {selectedCard.partOfSpeech && selectedCard.partOfSpeech !== 'n/a' && (
+                      <span className="px-2 py-1 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg uppercase">
+                        {selectedCard.partOfSpeech}
+                      </span>
+                    )}
+                    {selectedCard.cefrLevel && (
+                      <span className="px-2 py-1 bg-indigo-50 text-indigo-600 text-xs font-bold rounded-lg border border-indigo-100">
+                        {selectedCard.cefrLevel}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 p-6 rounded-3xl space-y-4">
+                  {selectedCard.englishDefinition && (
+                    <div>
+                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">English Definition (英文解釋)</p>
+                      <p className="text-slate-700 font-semibold leading-relaxed">{selectedCard.englishDefinition}</p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">中文翻譯</p>
+                    <p className="text-slate-950 text-lg font-bold">{selectedCard.translation}</p>
+                  </div>
+                </div>
+
+                {selectedCard.example && (
+                  <div className="bg-indigo-50/50 p-6 rounded-3xl border border-indigo-100/30">
+                    <p className="text-[10px] text-indigo-400 font-black uppercase tracking-widest mb-1.5">Context Sentence (例句/影片原句)</p>
+                    <p className="text-indigo-900 italic font-medium">"{selectedCard.example}"</p>
+                  </div>
+                )}
+
+                <div className="flex flex-col sm:flex-row gap-3 pt-4">
+                  <button 
+                    onClick={() => setIsEditingCard(true)}
+                    className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black shadow-lg hover:bg-slate-850 active:scale-95 transition-all flex items-center justify-center gap-2"
+                  >
+                    ✏️ 編輯單字內容
+                  </button>
+                  <button 
+                    onClick={() => {
+                      showCustomConfirm("刪除單字卡", "確定要刪除這個單字卡嗎？", () => {
+                        handleDeleteCard(selectedCard.id, false);
+                        setSelectedCard(null);
+                        setEditForm(null);
+                      });
+                    }}
+                    className="py-4 px-5 bg-red-50 text-red-600 border border-red-100 rounded-2xl font-black active:scale-95 transition-all flex items-center justify-center gap-2"
+                    title="刪除此單字"
+                  >
+                    🗑️ 刪除單字
+                  </button>
+                  <button 
+                    onClick={() => { setSelectedCard(null); setEditForm(null); }}
+                    className="px-6 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold active:scale-95 transition-all"
+                  >
+                    關閉
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* 編輯視圖 */
+              <div className="space-y-6">
+                <h3 className="text-xl font-black text-slate-900 mb-2">編輯單字內容</h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">英文單字</label>
+                    <input 
+                      type="text"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-slate-900"
+                      value={editForm.word}
+                      onChange={(e) => setEditForm({ ...editForm, word: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">詞性 (Part of Speech)</label>
+                      <select 
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-slate-900 font-bold text-slate-600"
+                        value={editForm.partOfSpeech}
+                        onChange={(e) => setEditForm({...editForm, partOfSpeech: e.target.value})}
+                      >
+                        <option value="n/a">n/a</option>
+                        <option value="n.">n.</option>
+                        <option value="v.">v.</option>
+                        <option value="adj.">adj.</option>
+                        <option value="adv.">adv.</option>
+                        <option value="phr.">phr.</option>
+                        <option value="conj.">conj.</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">CEFR 難度分級</label>
+                      <select 
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-slate-900 font-bold text-slate-600"
+                        value={editForm.cefrLevel || 'B2'}
+                        onChange={(e) => setEditForm({...editForm, cefrLevel: e.target.value})}
+                      >
+                        <option value="B2">B2</option>
+                        <option value="C1">C1</option>
+                        <option value="C2">C2</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">English Definition (英文解釋)</label>
+                    <textarea 
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-slate-900 text-sm font-medium"
+                      rows={2}
+                      value={editForm.englishDefinition || ''}
+                      onChange={(e) => setEditForm({ ...editForm, englishDefinition: e.target.value })}
+                      placeholder="簡短英文解釋..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">中文翻譯</label>
+                    <input 
+                      type="text"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-slate-900"
+                      value={editForm.translation}
+                      onChange={(e) => setEditForm({ ...editForm, translation: e.target.value })}
+                      placeholder="中文意思..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">影片原句 (Example Sentence)</label>
+                    <textarea 
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm italic"
+                      rows={3}
+                      value={editForm.example}
+                      onChange={(e) => setEditForm({ ...editForm, example: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-4">
+                  <button 
+                    onClick={handleSaveCardEdit}
+                    className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all"
+                  >
+                    💾 儲存修改
+                  </button>
+                  <button 
+                    onClick={() => setIsEditingCard(false)}
+                    className="px-6 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold active:scale-95 transition-all"
+                  >
+                    取消
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 整合式自訂對話框 (解決 IFrame 中 native alert / confirm 受限問題) */}
+      {confirmModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200" id="custom-dialog-container">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl border border-slate-100 text-center animate-in scale-in duration-300" id="custom-dialog-card">
+            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-6 ${confirmModal.isAlert ? 'bg-indigo-50 text-indigo-600' : 'bg-red-50 text-red-600'}`} id="custom-dialog-icon">
+              {confirmModal.isAlert ? 'ℹ️' : '⚠️'}
+            </div>
+            <h3 className="text-xl font-black text-slate-900 mb-2" id="custom-dialog-title">{confirmModal.title}</h3>
+            <p className="text-slate-500 text-sm mb-8 leading-relaxed font-semibold text-center" id="custom-dialog-msg">{confirmModal.message}</p>
+            
+            <div className="flex gap-3" id="custom-dialog-actions">
+              {!confirmModal.isAlert && (
+                <button 
+                  id="custom-dialog-cancel-btn"
+                  onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))} 
+                  className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-black text-sm transition-all active:scale-95"
+                >
+                  {confirmModal.cancelText || '取消'}
+                </button>
+              )}
+              <button 
+                id="custom-dialog-confirm-btn"
+                onClick={confirmModal.onConfirm} 
+                className={`flex-1 py-3.5 text-white rounded-2xl font-black text-sm transition-all active:scale-95 ${confirmModal.isAlert ? 'bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100' : 'bg-red-600 hover:bg-red-700 shadow-lg shadow-red-100'}`}
+              >
+                {confirmModal.confirmText || '確定'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
