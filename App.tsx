@@ -4,8 +4,16 @@ import { Flashcard, VideoSet } from './types';
 import YouTubeInput from './components/YouTubeInput';
 import FlashcardItem from './components/FlashcardItem';
 import { fetchTranscript, analyzeTranscript } from './services/vocabService';
+import { translations, LocaleType } from './locale';
+import { speakWord } from './utils/speech';
 
 const App: React.FC = () => {
+  const [locale, setLocale] = useState<LocaleType>(() => {
+    return (localStorage.getItem('vocab_master_lang') as LocaleType) || 'zh';
+  });
+
+  const t = translations[locale];
+
   const [videoSets, setVideoSets] = useState<VideoSet[]>(() => {
     const saved = localStorage.getItem('vocab_master_sets');
     if (saved) {
@@ -68,7 +76,11 @@ const App: React.FC = () => {
     onConfirm: () => {},
   });
 
-  const showCustomConfirm = (title: string, message: string, onConfirm: () => void, confirmText = "確定", cancelText = "取消") => {
+  useEffect(() => {
+    localStorage.setItem('vocab_master_lang', locale);
+  }, [locale]);
+
+  const showCustomConfirm = (title: string, message: string, onConfirm: () => void, confirmText = t.confirm, cancelText = t.cancel) => {
     setConfirmModal({
       isOpen: true,
       title,
@@ -88,7 +100,7 @@ const App: React.FC = () => {
       isOpen: true,
       title,
       message,
-      confirmText: "確定",
+      confirmText: t.confirm,
       onConfirm: () => {
         if (onConfirmAction) onConfirmAction();
         setConfirmModal(prev => ({ ...prev, isOpen: false }));
@@ -151,29 +163,29 @@ const App: React.FC = () => {
       setCurrentKey(cleanGeminiKey);
       localStorage.setItem('VOCAB_MASTER_GEMINI_KEY', cleanGeminiKey);
       setApiKeyIntoGlobal(cleanGeminiKey);
-      message += "Gemini API 金鑰已變更\n";
+      message += locale === 'zh' ? "Gemini API 金鑰已變更\n" : "Gemini API Key updated\n";
     }
 
     // OpenAI Key
     if (cleanOpenaiKey !== openaiKey) {
       setOpenaiKey(cleanOpenaiKey);
       localStorage.setItem('VOCAB_MASTER_OPENAI_KEY', cleanOpenaiKey);
-      message += "OpenAI API 金鑰已變更\n";
+      message += locale === 'zh' ? "OpenAI API 金鑰已變更\n" : "OpenAI API Key updated\n";
     }
 
     // Supadata Key
     if (cleanSupadataKey !== supadataKey) {
       setSupadataKey(cleanSupadataKey);
       localStorage.setItem('VOCAB_MASTER_SUPADATA_KEY', cleanSupadataKey);
-      message += "Supadata API 金鑰已變更\n";
+      message += locale === 'zh' ? "Supadata API 金鑰已變更\n" : "Supadata API Key updated\n";
     }
 
     // 關閉設定與數據中心彈窗
     setShowConfig(false);
 
     // 顯示自定義設定成功提示
-    const alertBody = message ? `${message}\n設定已成功儲存入瀏覽器本機快取！` : "設定已成功儲存！";
-    showCustomAlert("設定已儲存", alertBody);
+    const alertBody = message ? `${message}\n${t.settingsSavedDetail}` : t.settingsSavedDetail;
+    showCustomAlert(t.settingsSaved, alertBody);
   };
 
   const [loadingStep, setLoadingStep] = useState<'idle' | 'fetching' | 'analyzing'>('idle');
@@ -209,7 +221,7 @@ const App: React.FC = () => {
       setCurrentSetId(newSet.id);
       setView('setDetail');
     } catch (error: any) {
-      showCustomAlert("分析失敗", error.message || "未知錯誤，請確認影片網址或 API 金鑰。");
+      showCustomAlert(t.analyzeFailed, error.message || t.analyzeFailedDetail);
     } finally {
       setIsLoading(false);
       setLoadingStep('idle');
@@ -225,7 +237,7 @@ const App: React.FC = () => {
       word: manualWord.word,
       partOfSpeech: manualWord.pos,
       translation: manualWord.trans,
-      example: manualWord.example || '使用者手動新增的單字',
+      example: manualWord.example || (locale === 'zh' ? '使用者手動新增的單字' : 'Manually added word'),
       status: 'new',
       englishDefinition: manualWord.englishDefinition || ''
     };
@@ -271,7 +283,7 @@ const App: React.FC = () => {
     let cardsToReview = targetSet.cards;
     if (mode === 'learning') cardsToReview = targetSet.cards.filter(c => c.status !== 'learned');
     if (cardsToReview.length === 0) {
-      showCustomAlert("學習提示", "沒有需要學習的單字！");
+      showCustomAlert(t.reviewHint, t.noWordsToReview);
       return;
     }
     setCurrentSetId(setId);
@@ -282,7 +294,7 @@ const App: React.FC = () => {
 
   const deleteSet = (e: React.MouseEvent, setId: string) => {
     e.stopPropagation();
-    showCustomConfirm("刪除單字集", "確定要刪除此單字集嗎？這會一併清除該集的所有單字卡，且無法復原喔！", () => {
+    showCustomConfirm(t.deleteSetTitle, t.deleteSetConfirm, () => {
       setVideoSets(prev => prev.filter(s => s.id !== setId));
     });
   };
@@ -303,7 +315,7 @@ const App: React.FC = () => {
     };
 
     if (confirmRequired) {
-      showCustomConfirm("刪除單字卡", "確定要刪除此單字卡嗎？", performDeletion);
+      showCustomConfirm(t.deleteCardTitle, t.deleteCardConfirm, performDeletion);
     } else {
       performDeletion();
     }
@@ -322,7 +334,7 @@ const App: React.FC = () => {
   const copyDataToClipboard = () => {
     const dataStr = JSON.stringify(videoSets);
     navigator.clipboard.writeText(dataStr).then(() => {
-      showCustomAlert("複製成功", "所有單字數據已成功複製到剪貼簿！您可以將其貼在記事本中妥善保存。");
+      showCustomAlert(t.copiedTitle, t.copiedDetail);
     });
   };
 
@@ -331,14 +343,14 @@ const App: React.FC = () => {
       const importedData = JSON.parse(importText.trim());
       if (Array.isArray(importedData)) {
         setVideoSets(importedData);
-        showCustomAlert("還原成功", "已成功從備份數據碼還原所有單字收藏！");
+        showCustomAlert(t.restoreSuccess, t.restoreSuccessBody);
         setImportText('');
         setShowConfig(false);
       } else {
-        showCustomAlert("格式不正確", "貼上的數據並非有效的單字集陣列，請重新確認。");
+        showCustomAlert(t.invalidFormat, t.invalidFormatDetail);
       }
     } catch (err) {
-      showCustomAlert("格式錯誤", "無效的數據格式，請確認是否複製完整。");
+      showCustomAlert(t.formatError, t.formatErrorDetail);
     }
   };
 
@@ -351,13 +363,13 @@ const App: React.FC = () => {
         const importedData = JSON.parse(event.target?.result as string);
         if (Array.isArray(importedData)) {
           setVideoSets(importedData);
-          showCustomAlert("還原成功", "已成功從 JSON 備份檔案還原所有單字收藏！");
+          showCustomAlert(t.restoreSuccess, t.restoreSuccessFile);
           setShowConfig(false);
         } else {
-          showCustomAlert("還原失敗", "檔案內容結構不符，無法還原。");
+          showCustomAlert(t.restoreFailed, t.restoreFailedDetail);
         }
       } catch (err) {
-        showCustomAlert("還原失敗", "檔案讀取或解析失敗，可能檔案已損壞。");
+        showCustomAlert(t.restoreFailed, t.restoreFailedCorrupted);
       }
     };
     fileReader.readAsText(file);
@@ -365,10 +377,10 @@ const App: React.FC = () => {
 
   const currentSet = videoSets.find(s => s.id === currentSetId);
 
-  if (isInitializing) return <div className="min-h-screen bg-slate-50 flex items-center justify-center font-bold text-slate-400">載入中...</div>;
+  if (isInitializing) return <div className="min-h-screen bg-slate-50 flex items-center justify-center font-bold text-slate-400">{t.loading}</div>;
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-32 px-4 pt-8 md:pt-12 relative">
+    <div className="min-h-screen bg-slate-50 pb-32 px-4 pt-8 md:pt-12 relative animate-in fade-in duration-300">
       {/* 設定與數據中心彈窗 */}
       {showConfig && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
@@ -377,7 +389,7 @@ const App: React.FC = () => {
             
             <h3 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-3">
               <span className="w-10 h-10 bg-emerald-600 text-white rounded-2xl flex items-center justify-center text-sm italic">YT</span>
-              YTtoVocab 系統設定與數據中心
+              {t.configTitle}
             </h3>
 
             {/* AI 狀態與金鑰區塊 */}
@@ -390,7 +402,7 @@ const App: React.FC = () => {
                   }}
                   className={`flex-1 py-3 rounded-xl font-black text-xs transition-all ${aiProvider === 'gemini' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400'}`}
                 >
-                  Gemini (預設)
+                  {t.defaultGemini}
                 </button>
                 <button 
                   onClick={() => {
@@ -399,18 +411,18 @@ const App: React.FC = () => {
                   }}
                   className={`flex-1 py-3 rounded-xl font-black text-xs transition-all ${aiProvider === 'openai' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
                 >
-                  ChatGPT (GPT-4o)
+                  {t.chatGpt}
                 </button>
               </div>
 
               <form onSubmit={handleSaveKey} className="space-y-6">
                 {aiProvider === 'gemini' ? (
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Gemini API 金鑰 (選填)</label>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">{t.geminiKeyLabel}</label>
                     <div className="relative">
                       <input 
                         type={showApiKey ? "text" : "password"}
-                        placeholder="貼上 Gemini API Key..."
+                        placeholder={locale === 'zh' ? "貼上 Gemini API Key..." : "Paste Gemini API Key..."}
                         value={apiKeyInput}
                         onChange={(e) => setApiKeyInput(e.target.value)}
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 pr-12"
@@ -423,11 +435,17 @@ const App: React.FC = () => {
                         {showApiKey ? "👁️" : "👁️‍🗨️"}
                       </button>
                     </div>
-                    <p className="mt-2 text-[10px] text-slate-400 ml-1">註：若留空則使用系統預設免費額度此處為選填。請至 <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-emerald-500 underline font-bold">AI Studio</a> 申請</p>
+                    <p className="mt-2 text-[10px] text-slate-400 ml-1">
+                      {locale === 'zh' ? (
+                        <>註：若留空則使用系統預設免費額度此處為選填。請至 <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-emerald-500 underline font-bold">AI Studio</a> 申請</>
+                      ) : (
+                        <>Note: Leave blank to use system default free limits. Obtain keys from <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-emerald-500 underline font-bold">AI Studio</a></>
+                      )}
+                    </p>
                   </div>
                 ) : (
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">OpenAI API 金鑰 (ChatGPT - 選填)</label>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">{t.openaiKeyLabel}</label>
                     <div className="relative">
                       <input 
                         type={showOpenaiKey ? "text" : "password"}
@@ -439,17 +457,23 @@ const App: React.FC = () => {
                       <button 
                         type="button"
                         onClick={() => setShowOpenaiKey(!showOpenaiKey)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-605"
                       >
                         {showOpenaiKey ? "👁️" : "👁️‍🗨️"}
                       </button>
                     </div>
-                    <p className="mt-2 text-[10px] text-slate-400 ml-1">註：使用 ChatGPT 可以選填此 API Key，留空則嘗試以伺服器預設對接。請至 <a href="https://platform.openai.com/api-keys" target="_blank" className="text-blue-500 underline font-bold">OpenAI Platform</a> 申請</p>
+                    <p className="mt-2 text-[10px] text-slate-400 ml-1">
+                      {locale === 'zh' ? (
+                        <>註：使用 ChatGPT 可以選填此 API Key，留空則嘗試以伺服器預設對接。請至 <a href="https://platform.openai.com/api-keys" target="_blank" className="text-blue-500 underline font-bold">OpenAI Platform</a> 申請</>
+                      ) : (
+                        <>Note: Leave blank to attempt using system default proxy. Obtain keys from <a href="https://platform.openai.com/api-keys" target="_blank" className="text-blue-500 underline font-bold">OpenAI Platform</a></>
+                      )}
+                    </p>
                   </div>
                 )}
 
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Supadata API 金鑰 (獲取影片內容 - 選填)</label>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">{t.supadataKeyLabel}</label>
                   <div className="relative">
                     <input 
                       type={showSupadataKey ? "text" : "password"}
@@ -466,10 +490,16 @@ const App: React.FC = () => {
                       {showSupadataKey ? "👁️" : "👁️‍🗨️"}
                     </button>
                   </div>
-                  <p className="mt-2 text-[10px] text-slate-400 ml-1">註：請至 <a href="https://supadata.ai" target="_blank" className="text-emerald-500 underline font-bold">supadata.ai</a> 申請免費 Key</p>
+                  <p className="mt-2 text-[10px] text-slate-400 ml-1">
+                    {locale === 'zh' ? (
+                      <>註：請至 <a href="https://supadata.ai" target="_blank" className="text-emerald-500 underline font-bold">supadata.ai</a> 申請免費 Key</>
+                    ) : (
+                      <>Note: Register at <a href="https://supadata.ai" target="_blank" className="text-emerald-500 underline font-bold">supadata.ai</a> to get a free key</>
+                    )}
+                  </p>
                 </div>
 
-                <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold active:scale-95 transition-all shadow-lg shadow-slate-100">儲存設定</button>
+                <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold active:scale-95 transition-all shadow-lg shadow-slate-100">{t.saveSettings}</button>
               </form>
             </div>
 
@@ -478,31 +508,31 @@ const App: React.FC = () => {
             {/* 備份還原區塊 */}
             <div className="space-y-6">
               <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">備份數據 (防遺失必備)</label>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">{t.backupLabel}</label>
                 <div className="grid grid-cols-2 gap-3">
-                  <button onClick={copyDataToClipboard} className="py-4 bg-indigo-50 text-indigo-600 rounded-2xl font-bold text-sm hover:bg-indigo-100 transition-all border border-indigo-100">一鍵複製數據碼</button>
-                  <button onClick={exportAsFile} className="py-4 bg-slate-50 text-slate-600 rounded-2xl font-bold text-sm hover:bg-slate-100 transition-all border border-slate-200">下載 JSON 檔案</button>
+                  <button onClick={copyDataToClipboard} className="py-4 bg-indigo-50 text-indigo-600 rounded-2xl font-bold text-sm hover:bg-indigo-100 transition-all border border-indigo-100">{t.copyDataCode}</button>
+                  <button onClick={exportAsFile} className="py-4 bg-slate-50 text-slate-600 rounded-2xl font-bold text-sm hover:bg-slate-100 transition-all border border-slate-200">{t.downloadJson}</button>
                 </div>
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">還原數據</label>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">{t.restoreLabel}</label>
                 <textarea 
                   className="w-full h-24 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-mono"
-                  placeholder="在此貼上您之前複製的數據碼..."
+                  placeholder={t.restorePlaceholder}
                   value={importText}
                   onChange={(e) => setImportText(e.target.value)}
                 />
                 <div className="mt-3 flex gap-2">
-                  <button onClick={handleImportText} className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold shadow-lg shadow-emerald-100 active:scale-95 transition-all">貼上還原</button>
+                  <button onClick={handleImportText} className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold shadow-lg shadow-emerald-100 active:scale-95 transition-all">{t.pasteRestore}</button>
                   <input type="file" ref={fileInputRef} onChange={handleImportFile} accept=".json" className="hidden" />
-                  <button onClick={() => fileInputRef.current?.click()} className="px-6 py-4 bg-white text-emerald-600 border border-emerald-100 rounded-2xl font-bold active:scale-95 transition-all">選擇檔案還原</button>
+                  <button onClick={() => fileInputRef.current?.click()} className="px-6 py-4 bg-white text-emerald-600 border border-emerald-100 rounded-2xl font-bold active:scale-95 transition-all">{t.fileRestore}</button>
                 </div>
               </div>
             </div>
 
             <p className="mt-8 text-[11px] text-slate-400 leading-relaxed font-medium">
-              💡 <span className="text-amber-500 font-bold">重要提醒</span>：由於瀏覽器安全限制，資料是跟隨網址儲存的。若網址（URL）發生變動，舊資料會「隱形」。請務必養成隨手「複製數據碼」存放在記事本的習慣。
+              {t.importantWarning}
             </p>
           </div>
         </div>
@@ -514,28 +544,35 @@ const App: React.FC = () => {
             YTtoVocab
           </h1>
           <div className="flex items-center gap-2">
-            <p className="text-slate-500 text-sm">YouTube 影片單字大師</p>
+            <p className="text-slate-500 text-sm">{t.subtitle}</p>
           </div>
         </div>
         
         <div className="flex items-center gap-2">
-          {videoSets.length > 0 && <span className="hidden md:inline text-[10px] font-black text-emerald-500 bg-emerald-50 px-3 py-1.5 rounded-full uppercase tracking-widest">資料已即時存檔</span>}
-          <button onClick={() => setShowConfig(true)} className="px-4 py-2 bg-white text-slate-600 rounded-xl text-sm font-bold shadow-sm border border-slate-200 flex items-center gap-2 hover:bg-slate-50 transition-all">
-            ⚙️ 設定
+          {videoSets.length > 0 && <span className="hidden md:inline text-[10px] font-black text-emerald-500 bg-emerald-50 px-3 py-1.5 rounded-full uppercase tracking-widest">{t.autosaved}</span>}
+          <button 
+            onClick={() => setLocale(locale === 'zh' ? 'en' : 'zh')} 
+            className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-black shadow-sm flex items-center gap-2 hover:bg-indigo-700 transition-all active:scale-95"
+            title={locale === 'zh' ? 'Switch to English' : '切換至繁中'}
+          >
+            🌐 {locale === 'zh' ? 'English' : '繁中'}
           </button>
-          {view !== 'home' && <button onClick={() => setView('home')} className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-sm font-bold border border-indigo-100 transition-all active:scale-95">返回首頁</button>}
+          <button onClick={() => setShowConfig(true)} className="px-4 py-2 bg-white text-slate-600 rounded-xl text-sm font-bold shadow-sm border border-slate-200 flex items-center gap-2 hover:bg-slate-50 transition-all">
+            {t.settings}
+          </button>
+          {view !== 'home' && <button onClick={() => setView('home')} className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-sm font-bold border border-indigo-100 transition-all active:scale-95">{t.backHome}</button>}
         </div>
       </header>
 
       <main className="max-w-4xl mx-auto">
         {view === 'home' && (
           <div className="space-y-12">
-            <YouTubeInput onProcess={handleProcessVideo} isLoading={isLoading} loadingStep={loadingStep} aiProvider={aiProvider} />
+            <YouTubeInput onProcess={handleProcessVideo} isLoading={isLoading} loadingStep={loadingStep} aiProvider={aiProvider} locale={locale} />
             <div className="space-y-4">
-              <h2 className="text-xl font-bold text-slate-800">我的單字收藏 ({videoSets.length})</h2>
+              <h2 className="text-xl font-bold text-slate-800">{t.myCollections} ({videoSets.length})</h2>
               {videoSets.length === 0 ? (
                 <div className="text-center py-20 bg-white rounded-[2.5rem] border-2 border-dashed border-slate-200 text-slate-400 font-medium">
-                  貼上連結，或點擊「設定」還原先前的備份紀錄！
+                  {t.emptyCollections}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -545,10 +582,10 @@ const App: React.FC = () => {
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                       </button>
                       <h3 className="font-bold text-slate-800 mb-3 line-clamp-2 pr-10 text-lg leading-snug">{set.title}</h3>
-                      <p className="text-[10px] text-slate-400 mb-6 uppercase tracking-widest font-black">{new Date(set.createdAt).toLocaleDateString()} 更新</p>
+                      <p className="text-[10px] text-slate-400 mb-6 uppercase tracking-widest font-black">{new Date(set.createdAt).toLocaleDateString()} {t.updated}</p>
                       <div className="flex gap-2">
-                        <span className="px-4 py-1.5 bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-full uppercase tracking-wider">{set.cards.length} 個單字</span>
-                        <span className="px-4 py-1.5 bg-emerald-50 text-emerald-600 text-[10px] font-black rounded-full uppercase tracking-wider">進度: {set.cards.filter(c => c.status === 'learned').length} / {set.cards.length}</span>
+                        <span className="px-4 py-1.5 bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-full uppercase tracking-wider">{set.cards.length} {t.wordsCount}</span>
+                        <span className="px-4 py-1.5 bg-emerald-50 text-emerald-600 text-[10px] font-black rounded-full uppercase tracking-wider">{t.progress}: {set.cards.filter(c => c.status === 'learned').length} / {set.cards.length}</span>
                       </div>
                     </div>
                   ))}
@@ -564,8 +601,8 @@ const App: React.FC = () => {
               <h2 className="text-2xl font-black text-slate-800 mb-3">{currentSet.title}</h2>
               <p className="text-slate-500 text-sm mb-10 leading-relaxed italic border-l-4 border-indigo-100 pl-4">"{currentSet.transcript}"</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button onClick={() => startLearning(currentSet.id, 'all')} className="py-5 bg-slate-900 text-white rounded-2xl font-black shadow-lg shadow-slate-200 active:scale-95 transition-all text-lg">全部複習</button>
-                <button onClick={() => startLearning(currentSet.id, 'learning')} className="py-5 rounded-2xl font-black border-2 border-indigo-100 bg-white text-indigo-600 active:scale-95 transition-all text-lg">複習還在學</button>
+                <button onClick={() => startLearning(currentSet.id, 'all')} className="py-5 bg-slate-900 text-white rounded-2xl font-black shadow-lg shadow-slate-200 active:scale-95 transition-all text-lg">{t.reviewAll}</button>
+                <button onClick={() => startLearning(currentSet.id, 'learning')} className="py-5 rounded-2xl font-black border-2 border-indigo-100 bg-white text-indigo-600 active:scale-95 transition-all text-lg">{t.reviewLearning}</button>
               </div>
             </div>
 
@@ -575,14 +612,14 @@ const App: React.FC = () => {
                   onClick={() => setShowManualForm(true)}
                   className="w-full py-4 border-2 border-dashed border-indigo-200 rounded-2xl text-indigo-500 font-bold hover:bg-indigo-50 transition-all flex items-center justify-center gap-2"
                 >
-                  <span className="text-xl">+</span> 手動增加單字卡
+                  <span className="text-xl">+</span> {t.addManualBtn}
                 </button>
               ) : (
                 <form onSubmit={addManualCard} className="space-y-4 animate-in slide-in-from-top-2">
                   <div className="grid grid-cols-3 gap-2">
                     <input 
                       className="col-span-2 px-4 py-3 rounded-xl border border-indigo-100 outline-none focus:ring-2 focus:ring-indigo-500"
-                      placeholder="英文單字 (如: Resilience)"
+                      placeholder={t.wordPlaceholder}
                       value={manualWord.word}
                       onChange={e => setManualWord({...manualWord, word: e.target.value})}
                       required
@@ -597,34 +634,34 @@ const App: React.FC = () => {
                   </div>
                   <input 
                     className="w-full px-4 py-3 rounded-xl border border-indigo-100 outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder="英文解釋/定義 (選填)"
+                    placeholder={t.englishDefPlaceholder}
                     value={manualWord.englishDefinition}
                     onChange={e => setManualWord({...manualWord, englishDefinition: e.target.value})}
                   />
                   <input 
                     className="w-full px-4 py-3 rounded-xl border border-indigo-100 outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder="中文翻譯"
+                    placeholder={t.chineseTransPlaceholder}
                     value={manualWord.trans}
                     onChange={e => setManualWord({...manualWord, trans: e.target.value})}
                     required
                   />
                   <textarea 
                     className="w-full px-4 py-3 rounded-xl border border-indigo-100 outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-                    placeholder="例句內容 (選填)"
+                    placeholder={t.examplePlaceholder}
                     rows={2}
                     value={manualWord.example}
                     onChange={e => setManualWord({...manualWord, example: e.target.value})}
                   />
                   <div className="flex gap-2">
-                    <button type="submit" className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-100">儲存</button>
-                    <button type="button" onClick={() => setShowManualForm(false)} className="px-6 py-3 bg-white text-slate-400 rounded-xl font-bold border border-slate-200">取消</button>
+                    <button type="submit" className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-100">{t.saveBtn}</button>
+                    <button type="button" onClick={() => setShowManualForm(false)} className="px-6 py-3 bg-white text-slate-400 rounded-xl font-bold border border-slate-200">{t.cancel}</button>
                   </div>
                 </form>
               )}
             </div>
             
             <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm">
-              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8 ml-1">目前單字列表</h3>
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8 ml-1">{t.wordListHeader}</h3>
               <div className="divide-y divide-slate-100">
                 {currentSet.cards.map(card => (
                   <div 
@@ -633,15 +670,26 @@ const App: React.FC = () => {
                     className="py-4 px-4 -mx-4 rounded-2xl flex justify-between items-center group hover:bg-slate-50 transition-all cursor-pointer"
                   >
                     <div>
-                      <div className="flex items-center gap-3 mb-1">
+                      <div className="flex items-center gap-2 mb-1">
                         <span className="font-bold text-slate-800 text-lg group-hover:text-indigo-600 transition-colors">{card.word}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            speakWord(card.word);
+                          }}
+                          className="p-1 px-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-all active:scale-90"
+                          title={t.pronounceTooltip}
+                        >
+                          🔊
+                        </button>
                         {card.partOfSpeech && card.partOfSpeech !== 'n/a' && (
                           <span className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md font-black uppercase">{card.partOfSpeech}</span>
                         )}
                         {card.cefrLevel && (
                           <span className="text-[9px] px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded font-bold uppercase">{card.cefrLevel}</span>
                         )}
-                        {card.id.startsWith('manual-') && <span className="text-[8px] bg-indigo-100 text-indigo-500 px-1.5 py-0.5 rounded font-black uppercase tracking-tighter">自訂</span>}
+                        {card.id.startsWith('manual-') && <span className="text-[8px] bg-indigo-100 text-indigo-500 px-1.5 py-0.5 rounded font-black uppercase tracking-tighter">{t.customBadge}</span>}
                       </div>
                       <div className="flex flex-col gap-0.5">
                         {card.englishDefinition && (
@@ -652,7 +700,7 @@ const App: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-3">
                       <span className={`text-[10px] font-black uppercase px-3 py-1.5 rounded-full ${card.status === 'learned' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-300'}`}>
-                        {card.status === 'learned' ? '已學會' : '還在學'}
+                        {card.status === 'learned' ? t.learnedBadge : t.learningBadge}
                       </span>
                       <button 
                         onClick={(e) => {
@@ -660,7 +708,7 @@ const App: React.FC = () => {
                           handleDeleteCard(card.id);
                         }}
                         className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                        title="刪除此單字卡"
+                        title={t.deleteCardTooltip}
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -683,17 +731,24 @@ const App: React.FC = () => {
                 <div className="h-full bg-slate-900 transition-all duration-700" style={{ width: `${((currentIndex + 1) / activeCards.length) * 100}%` }} />
               </div>
             </div>
-            <FlashcardItem key={activeCards[currentIndex].id} card={activeCards[currentIndex]} onSwipeRight={() => handleSwipe('learned')} onSwipeLeft={() => handleSwipe('learning')} />
+            <FlashcardItem key={activeCards[currentIndex].id} card={activeCards[currentIndex]} onSwipeRight={() => handleSwipe('learned')} onSwipeLeft={() => handleSwipe('learning')} locale={locale} />
           </div>
         )}
 
         {view === 'summary' && (
           <div className="bg-white p-16 rounded-[3rem] shadow-2xl border border-slate-50 text-center max-w-lg mx-auto animate-in zoom-in duration-500">
             <div className="w-28 h-28 bg-slate-900 text-white rounded-[2rem] flex items-center justify-center text-5xl mx-auto mb-10 shadow-2xl transform -rotate-6">🏆</div>
-            <h2 className="text-3xl font-black text-slate-800 mb-4 tracking-tight">練習結束！</h2>
-            <p className="text-slate-500 mb-12 leading-relaxed font-medium text-lg">今天的努力，<br/>是明天實力的累積。</p>
+            <h2 className="text-3xl font-black text-slate-800 mb-4 tracking-tight">{t.sessionFinished}</h2>
+            <p className="text-slate-500 mb-12 leading-relaxed font-medium text-lg">
+              {t.sessionQuote.split('\n').map((line, idx) => (
+                <React.Fragment key={idx}>
+                  {line}
+                  {idx < t.sessionQuote.split('\n').length - 1 && <br/>}
+                </React.Fragment>
+              ))}
+            </p>
             <button onClick={() => setView('setDetail')} className="w-full py-6 bg-slate-900 text-white rounded-2xl font-black text-xl shadow-xl shadow-slate-200 active:scale-95 transition-all">
-              返回單字列表
+              {t.backToListBtn}
             </button>
           </div>
         )}
@@ -714,9 +769,17 @@ const App: React.FC = () => {
               /* 預覽視圖 */
               <div className="space-y-6">
                 <div>
-                  <span className="text-[10px] uppercase font-black text-slate-400 tracking-[0.2em] block mb-2">單字內容</span>
-                  <div className="flex items-center gap-3">
+                  <span className="text-[10px] uppercase font-black text-slate-400 tracking-[0.2em] block mb-2">{t.wordContentHeader}</span>
+                  <div className="flex flex-wrap items-center gap-3">
                     <h2 className="text-3xl font-black text-slate-950">{selectedCard.word}</h2>
+                    <button 
+                      type="button"
+                      onClick={() => speakWord(selectedCard.word)}
+                      className="w-8 h-8 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-sm transition-all active:scale-95 shadow-sm"
+                      title={t.pronounceTooltip}
+                    >
+                      🔊
+                    </button>
                     {selectedCard.partOfSpeech && selectedCard.partOfSpeech !== 'n/a' && (
                       <span className="px-2 py-1 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg uppercase">
                         {selectedCard.partOfSpeech}
@@ -733,19 +796,19 @@ const App: React.FC = () => {
                 <div className="bg-slate-50 p-6 rounded-3xl space-y-4">
                   {selectedCard.englishDefinition && (
                     <div>
-                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">English Definition (英文解釋)</p>
+                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">{t.englishDefinitionHeader}</p>
                       <p className="text-slate-700 font-semibold leading-relaxed">{selectedCard.englishDefinition}</p>
                     </div>
                   )}
                   <div>
-                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">中文翻譯</p>
+                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">{t.chineseTranslationHeader}</p>
                     <p className="text-slate-950 text-lg font-bold">{selectedCard.translation}</p>
                   </div>
                 </div>
 
                 {selectedCard.example && (
                   <div className="bg-indigo-50/50 p-6 rounded-3xl border border-indigo-100/30">
-                    <p className="text-[10px] text-indigo-400 font-black uppercase tracking-widest mb-1.5">Context Sentence (例句/影片原句)</p>
+                    <p className="text-[10px] text-indigo-400 font-black uppercase tracking-widest mb-1.5">{t.contextSentenceHeader}</p>
                     <p className="text-indigo-900 italic font-medium">"{selectedCard.example}"</p>
                   </div>
                 )}
@@ -755,37 +818,37 @@ const App: React.FC = () => {
                     onClick={() => setIsEditingCard(true)}
                     className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black shadow-lg hover:bg-slate-850 active:scale-95 transition-all flex items-center justify-center gap-2"
                   >
-                    ✏️ 編輯單字內容
+                    {t.editCardBtn}
                   </button>
                   <button 
                     onClick={() => {
-                      showCustomConfirm("刪除單字卡", "確定要刪除這個單字卡嗎？", () => {
+                      showCustomConfirm(t.deleteCardTitle, t.deleteCardConfirm, () => {
                         handleDeleteCard(selectedCard.id, false);
                         setSelectedCard(null);
                         setEditForm(null);
                       });
                     }}
                     className="py-4 px-5 bg-red-50 text-red-600 border border-red-100 rounded-2xl font-black active:scale-95 transition-all flex items-center justify-center gap-2"
-                    title="刪除此單字"
+                    title={t.deleteCardTooltip}
                   >
-                    🗑️ 刪除單字
+                    {t.deleteCardBtn}
                   </button>
                   <button 
                     onClick={() => { setSelectedCard(null); setEditForm(null); }}
                     className="px-6 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold active:scale-95 transition-all"
                   >
-                    關閉
+                    {t.close}
                   </button>
                 </div>
               </div>
             ) : (
               /* 編輯視圖 */
               <div className="space-y-6">
-                <h3 className="text-xl font-black text-slate-900 mb-2">編輯單字內容</h3>
+                <h3 className="text-xl font-black text-slate-900 mb-2">{t.editCardBtn}</h3>
                 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">英文單字</label>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">{t.wordLabel}</label>
                     <input 
                       type="text"
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-slate-900"
@@ -796,7 +859,7 @@ const App: React.FC = () => {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">詞性 (Part of Speech)</label>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">{t.posLabel}</label>
                       <select 
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-slate-900 font-bold text-slate-600"
                         value={editForm.partOfSpeech}
@@ -812,7 +875,7 @@ const App: React.FC = () => {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">CEFR 難度分級</label>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">{t.difficultyLabel}</label>
                       <select 
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-slate-900 font-bold text-slate-600"
                         value={editForm.cefrLevel || 'B2'}
@@ -826,29 +889,29 @@ const App: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">English Definition (英文解釋)</label>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">{t.englishDefinitionHeader}</label>
                     <textarea 
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-slate-900 text-sm font-medium"
                       rows={2}
                       value={editForm.englishDefinition || ''}
                       onChange={(e) => setEditForm({ ...editForm, englishDefinition: e.target.value })}
-                      placeholder="簡短英文解釋..."
+                      placeholder="e.g. The ability to recover quickly from difficulties."
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">中文翻譯</label>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">{t.chineseTranslationHeader}</label>
                     <input 
                       type="text"
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-slate-900"
                       value={editForm.translation}
                       onChange={(e) => setEditForm({ ...editForm, translation: e.target.value })}
-                      placeholder="中文意思..."
+                      placeholder="..."
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">影片原句 (Example Sentence)</label>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">{t.exampleSentenceLabel}</label>
                     <textarea 
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm italic"
                       rows={3}
@@ -863,13 +926,13 @@ const App: React.FC = () => {
                     onClick={handleSaveCardEdit}
                     className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all"
                   >
-                    💾 儲存修改
+                    💾 {t.saveChangesBtn}
                   </button>
                   <button 
                     onClick={() => setIsEditingCard(false)}
                     className="px-6 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold active:scale-95 transition-all"
                   >
-                    取消
+                    {t.cancel}
                   </button>
                 </div>
               </div>

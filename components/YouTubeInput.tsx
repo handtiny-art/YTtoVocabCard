@@ -1,15 +1,18 @@
 
 import React, { useState } from 'react';
+import { translations } from '../locale';
 
 interface YouTubeInputProps {
   onProcess: (url: string) => void;
   isLoading: boolean;
   loadingStep: 'idle' | 'fetching' | 'analyzing';
   aiProvider: 'gemini' | 'openai';
+  locale: 'zh' | 'en';
 }
 
-const YouTubeInput: React.FC<YouTubeInputProps> = ({ onProcess, isLoading, loadingStep, aiProvider }) => {
+const YouTubeInput: React.FC<YouTubeInputProps> = ({ onProcess, isLoading, loadingStep, aiProvider, locale }) => {
   const [url, setUrl] = useState('');
+  const t = translations[locale];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,12 +22,11 @@ const YouTubeInput: React.FC<YouTubeInputProps> = ({ onProcess, isLoading, loadi
   };
 
   const getLoadingMessage = () => {
-    if (loadingStep === 'fetching') return "正在抓取影片逐字稿...";
+    if (loadingStep === 'fetching') return t.transcriptFetching;
     if (loadingStep === 'analyzing') {
-      const aiName = aiProvider === 'gemini' ? 'Gemini' : 'ChatGPT';
-      return `正在使用 ${aiName} 掃描所有進階單字...`;
+      return aiProvider === 'gemini' ? t.scanningGemini : t.scanningOpenai;
     }
-    return "AI 正在分析...";
+    return t.aiAnalyzing;
   };
 
   return (
@@ -34,7 +36,7 @@ const YouTubeInput: React.FC<YouTubeInputProps> = ({ onProcess, isLoading, loadi
       <form onSubmit={handleSubmit} className="relative z-10 space-y-6">
         <div className="flex justify-between items-end">
           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">
-            輸入 YouTube 影片連結
+            {t.youtubeInputLabel}
           </label>
           <div className={`mb-3 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter flex items-center gap-1.5 ${aiProvider === 'gemini' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
             <div className={`w-1.5 h-1.5 rounded-full ${aiProvider === 'gemini' ? 'bg-emerald-500' : 'bg-blue-500'} animate-pulse`}></div>
@@ -43,7 +45,7 @@ const YouTubeInput: React.FC<YouTubeInputProps> = ({ onProcess, isLoading, loadi
         </div>
         <input
           type="text"
-          placeholder="在此貼上 YouTube 網址..."
+          placeholder={t.youtubeInputPlaceholder}
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           disabled={isLoading}
@@ -64,14 +66,13 @@ const YouTubeInput: React.FC<YouTubeInputProps> = ({ onProcess, isLoading, loadi
               <span className="text-lg">{getLoadingMessage()}</span>
             </>
           ) : (
-            <span className="text-lg">產生單字卡</span>
+            <span className="text-lg">{t.generateBtn}</span>
           )}
         </button>
       </form>
       
-      <p className="mt-5 text-center text-[11px] text-slate-400 font-medium leading-relaxed">
-        系統使用高級推理模型，能更精準地抓取影片中的關鍵詞彙與語境。<br/>
-        分析過程約需 5-10 秒，請保持網頁開啟。
+      <p className="mt-5 text-center text-[11px] text-slate-400 font-medium leading-relaxed whitespace-pre-line">
+        {t.inputSubtip}
       </p>
     </div>
   );
