@@ -8,8 +8,8 @@ import { translations, LocaleType } from './locale';
 import { speakWord } from './utils/speech';
 
 // 🟢 新增：初始化 Supabase
-const SUPABASE_URL = '你的_SUPABASE_URL';
-const SUPABASE_ANON_KEY = '你的_SUPABASE_ANON_KEY';
+const SUPABASE_URL = 'https://xbdxdjzbjncajjevaxzs.supabase.co/rest/v1/';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhiZHhkanpiam5jYWpqZXZheHpzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1MDgwODIsImV4cCI6MjA5NTA4NDA4Mn0.id9dJOjC6yXogvym6RV0yG-cpCK-rGjwR0ekuXhxd4U';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const App: React.FC = () => {
