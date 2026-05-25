@@ -1,21 +1,14 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { createClient } from '@supabase/supabase-js'; // 🟢 新增：引入 Supabase
 import { Flashcard, VideoSet } from './types';
 import YouTubeInput from './components/YouTubeInput';
 import FlashcardItem from './components/FlashcardItem';
+import { AppLogo } from './components/AppLogo';
 import { fetchTranscript, analyzeTranscript } from './services/vocabService';
 import { translations, LocaleType } from './locale';
 import { speakWord } from './utils/speech';
 
-// 🟢 新增：初始化 Supabase
-const SUPABASE_URL = 'https://xbdxdjzbjncajjevaxzs.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhiZHhkanpiam5jYWpqZXZheHpzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1MDgwODIsImV4cCI6MjA5NTA4NDA4Mn0.id9dJOjC6yXogvym6RV0yG-cpCK-rGjwR0ekuXhxd4U';
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
 const App: React.FC = () => {
-  // 🟢 新增：登入狀態管理
-  const [session, setSession] = useState<any>(null);
-
   const [locale, setLocale] = useState<LocaleType>(() => {
     return (localStorage.getItem('vocab_master_lang') as LocaleType) || 'zh';
   });
@@ -87,35 +80,6 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('vocab_master_lang', locale);
   }, [locale]);
-
-  // 🟢 新增：監聽 Supabase 登入狀態
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  // 🟢 新增：登入與登出函式
-  const loginWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin }
-    });
-    if (error) console.error("登入發生錯誤:", error.message);
-  };
-
-  const logout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) console.error("登出發生錯誤:", error.message);
-  };
 
   const showCustomConfirm = (title: string, message: string, onConfirm: () => void, confirmText = t.confirm, cancelText = t.cancel) => {
     setConfirmModal({
@@ -195,6 +159,7 @@ const App: React.FC = () => {
     
     let message = "";
 
+    // Gemini Key
     if (cleanGeminiKey !== currentKey) {
       setCurrentKey(cleanGeminiKey);
       localStorage.setItem('VOCAB_MASTER_GEMINI_KEY', cleanGeminiKey);
@@ -202,20 +167,24 @@ const App: React.FC = () => {
       message += locale === 'zh' ? "Gemini API 金鑰已變更\n" : "Gemini API Key updated\n";
     }
 
+    // OpenAI Key
     if (cleanOpenaiKey !== openaiKey) {
       setOpenaiKey(cleanOpenaiKey);
       localStorage.setItem('VOCAB_MASTER_OPENAI_KEY', cleanOpenaiKey);
       message += locale === 'zh' ? "OpenAI API 金鑰已變更\n" : "OpenAI API Key updated\n";
     }
 
+    // Supadata Key
     if (cleanSupadataKey !== supadataKey) {
       setSupadataKey(cleanSupadataKey);
       localStorage.setItem('VOCAB_MASTER_SUPADATA_KEY', cleanSupadataKey);
       message += locale === 'zh' ? "Supadata API 金鑰已變更\n" : "Supadata API Key updated\n";
     }
 
+    // 關閉設定與數據中心彈窗
     setShowConfig(false);
 
+    // 顯示自定義設定成功提示
     const alertBody = message ? `${message}\n${t.settingsSavedDetail}` : t.settingsSavedDetail;
     showCustomAlert(t.settingsSaved, alertBody);
   };
@@ -227,10 +196,12 @@ const App: React.FC = () => {
     setLoadingStep('fetching');
 
     try {
+      // 階段 1: 獲取逐字稿
       const { transcript, detectedTitle } = await fetchTranscript(url, supadataKey);
       
       setLoadingStep('analyzing');
 
+      // 階段 2: AI 分析
       const { summary, cards } = await analyzeTranscript(transcript, detectedTitle, {
         provider: aiProvider,
         geminiKey: currentKey,
@@ -351,6 +322,7 @@ const App: React.FC = () => {
     }
   };
 
+  // 數據管理功能
   const exportAsFile = () => {
     const dataStr = JSON.stringify(videoSets, null, 2);
     const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
@@ -408,37 +380,16 @@ const App: React.FC = () => {
 
   if (isInitializing) return <div className="min-h-screen bg-slate-50 flex items-center justify-center font-bold text-slate-400">{t.loading}</div>;
 
-  // 🟢 新增：未登入時的攔截畫面
-  if (!session) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
-        <div className="bg-white p-10 rounded-[2.5rem] shadow-xl border border-slate-100 text-center max-w-md w-full relative overflow-hidden">
-          <div className="w-20 h-20 bg-indigo-600 text-white rounded-3xl flex items-center justify-center text-3xl font-black italic mx-auto mb-6 shadow-lg shadow-indigo-200">YT</div>
-          <h1 className="text-3xl font-black text-slate-900 mb-3 tracking-tight">YTtoVocab</h1>
-          <p className="text-slate-500 mb-10 font-medium leading-relaxed">請先登入，這樣我們才能幫你把生成的單字卡永久保存下來！</p>
-          <button 
-            onClick={loginWithGoogle}
-            className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-lg active:scale-95 transition-all shadow-xl shadow-slate-200"
-          >
-            使用 Google 帳號登入
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // 以下是你原本完整的介面程式碼 (完全沒有刪減，只在 Header 加入了登出按鈕)
   return (
     <div className="min-h-screen bg-slate-50 pb-32 px-4 pt-8 md:pt-12 relative animate-in fade-in duration-300">
-      
-      {/* (省略原本的 Config Modal，完全保留在程式碼中) */}
+      {/* 設定與數據中心彈窗 */}
       {showConfig && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-8 shadow-2xl relative animate-in zoom-in duration-300 max-h-[90vh] overflow-y-auto">
             <button onClick={() => setShowConfig(false)} className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 bg-slate-100 w-10 h-10 rounded-full flex items-center justify-center transition-all">✕</button>
             
             <h3 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-3">
-              <span className="w-10 h-10 bg-emerald-600 text-white rounded-2xl flex items-center justify-center text-sm italic">YT</span>
+              <AppLogo size={36} className="shadow-sm" />
               {t.configTitle}
             </h3>
 
@@ -485,6 +436,13 @@ const App: React.FC = () => {
                         {showApiKey ? "👁️" : "👁️‍🗨️"}
                       </button>
                     </div>
+                    <p className="mt-2 text-[10px] text-slate-400 ml-1">
+                      {locale === 'zh' ? (
+                        <>註：若留空則使用系統預設免費額度此處為選填。請至 <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-emerald-500 underline font-bold">AI Studio</a> 申請</>
+                      ) : (
+                        <>Note: Leave blank to use system default free limits. Obtain keys from <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-emerald-500 underline font-bold">AI Studio</a></>
+                      )}
+                    </p>
                   </div>
                 ) : (
                   <div>
@@ -505,6 +463,13 @@ const App: React.FC = () => {
                         {showOpenaiKey ? "👁️" : "👁️‍🗨️"}
                       </button>
                     </div>
+                    <p className="mt-2 text-[10px] text-slate-400 ml-1">
+                      {locale === 'zh' ? (
+                        <>註：使用 ChatGPT 可以選填此 API Key，留空則嘗試以伺服器預設對接。請至 <a href="https://platform.openai.com/api-keys" target="_blank" className="text-blue-500 underline font-bold">OpenAI Platform</a> 申請</>
+                      ) : (
+                        <>Note: Leave blank to attempt using system default proxy. Obtain keys from <a href="https://platform.openai.com/api-keys" target="_blank" className="text-blue-500 underline font-bold">OpenAI Platform</a></>
+                      )}
+                    </p>
                   </div>
                 )}
 
@@ -526,6 +491,13 @@ const App: React.FC = () => {
                       {showSupadataKey ? "👁️" : "👁️‍🗨️"}
                     </button>
                   </div>
+                  <p className="mt-2 text-[10px] text-slate-400 ml-1">
+                    {locale === 'zh' ? (
+                      <>註：請至 <a href="https://supadata.ai" target="_blank" className="text-emerald-500 underline font-bold">supadata.ai</a> 申請免費 Key</>
+                    ) : (
+                      <>Note: Register at <a href="https://supadata.ai" target="_blank" className="text-emerald-500 underline font-bold">supadata.ai</a> to get a free key</>
+                    )}
+                  </p>
                 </div>
 
                 <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold active:scale-95 transition-all shadow-lg shadow-slate-100">{t.saveSettings}</button>
@@ -559,21 +531,28 @@ const App: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            <p className="mt-8 text-[11px] text-slate-400 leading-relaxed font-medium">
+              {t.importantWarning}
+            </p>
           </div>
         </div>
       )}
 
-      <header className="max-w-4xl mx-auto mb-8 flex items-center justify-between flex-wrap gap-4">
-        <div className="cursor-pointer" onClick={() => setView('home')}>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-            YTtoVocab
-          </h1>
-          <div className="flex items-center gap-2">
-            <p className="text-slate-500 text-sm">{t.subtitle}</p>
+      <header className="max-w-4xl mx-auto mb-8 flex items-center justify-between">
+        <div className="cursor-pointer flex items-center gap-3.5" onClick={() => setView('home')}>
+          <AppLogo size={46} className="shadow-md hover:scale-[1.03] active:scale-95 transition-all" />
+          <div>
+            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+              YTtoVocab
+            </h1>
+            <div className="flex items-center gap-2">
+              <p className="text-slate-500 text-sm">{t.subtitle}</p>
+            </div>
           </div>
         </div>
         
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
           {videoSets.length > 0 && <span className="hidden md:inline text-[10px] font-black text-emerald-500 bg-emerald-50 px-3 py-1.5 rounded-full uppercase tracking-widest">{t.autosaved}</span>}
           <button 
             onClick={() => setLocale(locale === 'zh' ? 'en' : 'zh')} 
@@ -584,10 +563,6 @@ const App: React.FC = () => {
           </button>
           <button onClick={() => setShowConfig(true)} className="px-4 py-2 bg-white text-slate-600 rounded-xl text-sm font-bold shadow-sm border border-slate-200 flex items-center gap-2 hover:bg-slate-50 transition-all">
             {t.settings}
-          </button>
-          {/* 🟢 新增：登出按鈕 */}
-          <button onClick={logout} className="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-sm font-bold border border-red-100 transition-all active:scale-95">
-            登出
           </button>
           {view !== 'home' && <button onClick={() => setView('home')} className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-sm font-bold border border-indigo-100 transition-all active:scale-95">{t.backHome}</button>}
         </div>
