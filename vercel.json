@@ -4,8 +4,8 @@
     { "source": "/api/*", "destination": "/api/index.ts" }
   ],
   "functions": {
-    "api/**/*": {
+    "api/index.ts": {
       "maxDuration": 60
-   }
+    }
   }
 }
