@@ -7,6 +7,7 @@ import { AppLogo } from './components/AppLogo';
 import { fetchTranscript, analyzeTranscript } from './services/vocabService';
 import { translations, LocaleType } from './locale';
 import { speakWord } from './utils/speech';
+import { supabase } from './services/supabaseClient';
 
 const App: React.FC = () => {
   const [locale, setLocale] = useState<LocaleType>(() => {
@@ -221,6 +222,43 @@ const App: React.FC = () => {
       setVideoSets(prev => [newSet, ...prev]);
       setCurrentSetId(newSet.id);
       setView('setDetail');
+
+      // 🚀 新增：當單字卡生成成功，在畫面上秀出來的同時，背景自動同步一份到 Supabase！
+      if (cards && cards.length > 0) {
+        try {
+          // 1. 安全撈取目前瀏覽器登入的 Google 用戶帳號
+          const { data: { user } } = await supabase.auth.getUser();
+          
+          if (user) {
+            // 2. 打包資料，欄位名稱百分之百精準對齊你的儲存表！
+            const cardsToInsert = cards.map((card: any) => ({
+              user_id: user.id,                          // 認證層用戶 ID
+              word: card.word || '',                     // 英文單字
+              definition: card.englishDefinition || '',  // 英文解釋
+              example_sentence: card.example || '',       // 例句
+              translation: card.translation || '',       // 中文翻譯
+              part_of_speech: card.partOfSpeech || 'n/a', // 詞性
+              cefr_level: card.cefrLevel || 'B2'         // CEFR 分級
+            }));
+
+            // 3. 一槍送進 Supabase 雲端
+            const { error: supabaseError } = await supabase
+              .from('flashcards')
+              .insert(cardsToInsert);
+
+            if (supabaseError) {
+              console.error("❌ Supabase 雲端存檔失敗:", supabaseError.message);
+            } else {
+              console.log(`✅ 成功同步將 ${cardsToInsert.length} 張單字卡寫入 Supabase 資料庫！`);
+            }
+          } else {
+            console.warn("⚠️ 偵測到目前未處於登入狀態，單字卡僅存在本地 LocalStorage 中。");
+          }
+        } catch (dbError) {
+          console.error("🚨 執行 Supabase 自動儲存時發生例外異常:", dbError);
+        }
+      }
+      
     } catch (error: any) {
       showCustomAlert(t.analyzeFailed, error.message || t.analyzeFailedDetail);
     } finally {
