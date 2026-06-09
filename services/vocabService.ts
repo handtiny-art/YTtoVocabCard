@@ -1,5 +1,6 @@
-
 import { Flashcard, GroundingSource } from "../types";
+// 🚀 引入 Supabase 客戶端實例以執行自動存檔
+import { supabase } from "./supabaseClient"; 
 
 /**
  * 第一階段：獲取 YouTube 逐字稿 (支援前端直接與後端 Proxy 代理自適應切換)
@@ -117,7 +118,44 @@ export const analyzeTranscript = async (
     }
 
     const result = await response.json();
-    return formatResult(result);
+    const formattedResult = formatResult(result);
+
+    // 🚀 新增：自動將生成的單字卡背景同步儲存至 Supabase `flashcards` 資料表
+    if (formattedResult.cards && formattedResult.cards.length > 0) {
+      try {
+        // 安全撈取當前登入的用戶資料（確保拿到 user.id）
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user) {
+          // 精準打包，完美對齊你在 Supabase 資料表開的欄位名稱！
+          const cardsToInsert = formattedResult.cards.map((card: Flashcard) => ({
+            user_id: user.id,                      // 認證層用戶 ID
+            word: card.word,                        // 英文單字
+            definition: card.englishDefinition,    // 英文解釋
+            example_sentence: card.example,         // 例句
+            translation: card.translation,          // 中文翻譯
+            part_of_speech: card.partOfSpeech,      // 詞性
+            cefr_level: card.cefrLevel              // CEFR 分級 (如 B2)
+          }));
+
+          const { error: supabaseError } = await supabase
+            .from('flashcards')
+            .insert(cardsToInsert);
+
+          if (supabaseError) {
+            console.error("❌ Supabase 自動存檔失敗:", supabaseError.message);
+          } else {
+            console.log(`✅ 成功自動將 ${cardsToInsert.length} 張單字卡同步寫入 Supabase 資料庫！`);
+          }
+        } else {
+          console.warn("⚠️ 未能自動存檔至 Supabase：檢測到當前未處於登入狀態。");
+        }
+      } catch (dbError) {
+        console.error("🚨 執行 Supabase 儲存行為時發生未預期異常:", dbError);
+      }
+    }
+
+    return formattedResult;
   } catch (error: any) {
     console.error("AI analyze error:", error);
     throw new Error(`產生單字卡失敗: ${error.message || "伺服器處理 AI 生成請求異常"}`);
