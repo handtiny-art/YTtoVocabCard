@@ -7,6 +7,14 @@ import OpenAI from "openai";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+if (process.env.NODE_ENV !== "production") {
+  try {
+    process.loadEnvFile(path.resolve(__dirname, "../.env.local"));
+  } catch {
+    // .env.local is optional
+  }
+}
+
 async function createServer() {
   const app = express();
   app.use(express.json());
@@ -24,7 +32,8 @@ async function createServer() {
     console.log(`[Server] Processing Video ID: ${videoId}`);
 
     try {
-      const SUPADATA_API_KEY = (req.headers['x-supadata-key'] as string) || process.env.SUPADATA_API_KEY;
+      const SUPADATA_API_KEY = (req.headers['x-supadata-key'] as string)
+        || (process.env.NODE_ENV !== "production" ? process.env.SUPADATA_API_KEY : undefined);
       
       if (!SUPADATA_API_KEY) {
         throw new Error("尚未設定 Supadata API Key。請在設定頁面中填入。");
@@ -105,7 +114,8 @@ async function createServer() {
     const userPrompt = `影片標題：${title || "YouTube Video"}\n逐字稿內容：\n---\n${truncatedTranscript}\n---`;
 
     if (provider === 'openai') {
-      const apiKey = openaiKey || process.env.OPENAI_API_KEY;
+      const apiKey = openaiKey
+        || (process.env.NODE_ENV !== "production" ? process.env.OPENAI_API_KEY : undefined);
       if (!apiKey) {
         return res.status(400).json({ error: "尚未設定 OpenAI API Key。請在設定頁面中填寫。" });
       }
@@ -129,7 +139,8 @@ async function createServer() {
       }
     } else {
       // Gemini
-      const apiKey = geminiKey || process.env.GEMINI_API_KEY;
+      const apiKey = geminiKey
+        || (process.env.NODE_ENV !== "production" ? process.env.GEMINI_API_KEY : undefined);
       if (!apiKey) {
         return res.status(400).json({ error: "尚未設定 Gemini API Key。請在設定頁面中填寫。" });
       }
