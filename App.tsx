@@ -1,5 +1,6 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import { Flashcard, VideoSet } from './types';
 import YouTubeInput from './components/YouTubeInput';
 import FlashcardItem from './components/FlashcardItem';
@@ -8,6 +9,7 @@ import { fetchTranscript, analyzeTranscript } from './services/vocabService';
 import { translations, LocaleType } from './locale';
 import { speakWord } from './utils/speech';
 import { supabase } from './services/supabaseClient';
+import * as dataService from './services/dataService';
 
 const App: React.FC = () => {
   const [locale, setLocale] = useState<LocaleType>(() => {
@@ -16,13 +18,11 @@ const App: React.FC = () => {
 
   const t = translations[locale];
 
-  const [videoSets, setVideoSets] = useState<VideoSet[]>(() => {
-    const saved = localStorage.getItem('vocab_master_sets');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { return []; }
-    }
-    return [];
-  });
+  const [videoSets, setVideoSets] = useState<VideoSet[]>([]);
+
+  const [session, setSession] = useState<Session | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isDataLoading, setIsDataLoading] = useState(false);
 
   const [currentKey, setCurrentKey] = useState<string>(() => {
     return localStorage.getItem('VOCAB_MASTER_GEMINI_KEY') || '';
@@ -53,8 +53,6 @@ const App: React.FC = () => {
   const [showApiKey, setShowApiKey] = useState(false);
   const [showOpenaiKey, setShowOpenaiKey] = useState(false);
   const [showSupadataKey, setShowSupadataKey] = useState(false);
-  const [importText, setImportText] = useState('');
-  const [isInitializing, setIsInitializing] = useState(true);
 
   const [showManualForm, setShowManualForm] = useState(false);
   const [manualWord, setManualWord] = useState({ word: '', pos: 'n.', trans: '', example: '', englishDefinition: '' });
@@ -117,9 +115,9 @@ const App: React.FC = () => {
     setIsEditingCard(false);
   };
 
-  const handleSaveCardEdit = () => {
+  const handleSaveCardEdit = async () => {
     if (!editForm || !currentSetId) return;
-    
+
     setVideoSets(prev => prev.map(set => {
       if (set.id === currentSetId) {
         return {
@@ -132,9 +130,13 @@ const App: React.FC = () => {
 
     setSelectedCard(editForm);
     setIsEditingCard(false);
-  };
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+    try {
+      await dataService.updateCard(editForm);
+    } catch (error: any) {
+      showCustomAlert(t.syncErrorTitle, error.message || t.syncErrorDetail);
+    }
+  };
 
   const setApiKeyIntoGlobal = (key: string) => {
     if (!key) return;
@@ -145,12 +147,49 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (currentKey) setApiKeyIntoGlobal(currentKey);
-    setIsInitializing(false);
   }, [currentKey]);
 
+  // 監聽登入狀態：啟動時取得現有 session，並訂閱後續變化
   useEffect(() => {
-    localStorage.setItem('vocab_master_sets', JSON.stringify(videoSets));
-  }, [videoSets]);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setIsAuthLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // 登入後從 Supabase 載入該用戶的單字收藏
+  useEffect(() => {
+    if (!session) {
+      setVideoSets([]);
+      return;
+    }
+
+    setIsDataLoading(true);
+    dataService.fetchVideoSets(session.user.id)
+      .then(sets => setVideoSets(sets))
+      .catch(() => showCustomAlert(t.loadDataErrorTitle, t.loadDataErrorDetail))
+      .finally(() => setIsDataLoading(false));
+  }, [session]);
+
+  const handleSignIn = async () => {
+    try {
+      await dataService.signInWithGoogle();
+    } catch (error: any) {
+      showCustomAlert(t.signInErrorTitle, error.message || t.signInErrorDetail);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await dataService.signOut();
+    setView('home');
+    setCurrentSetId(null);
+  };
 
   const handleSaveKey = (e: React.FormEvent) => {
     e.preventDefault();
@@ -193,13 +232,14 @@ const App: React.FC = () => {
   const [loadingStep, setLoadingStep] = useState<'idle' | 'fetching' | 'analyzing'>('idle');
 
   const handleProcessVideo = async (url: string) => {
+    if (!session) return;
     setIsLoading(true);
     setLoadingStep('fetching');
 
     try {
       // 階段 1: 獲取逐字稿
       const { transcript, detectedTitle } = await fetchTranscript(url, supadataKey);
-      
+
       setLoadingStep('analyzing');
 
       // 階段 2: AI 分析
@@ -209,56 +249,17 @@ const App: React.FC = () => {
         openaiKey: openaiKey
       });
 
-      const newSet: VideoSet = {
-        id: `set-${Date.now()}`,
+      // 階段 3: 寫入 Supabase（video_sets + flashcards）
+      const newSet = await dataService.createVideoSet(session.user.id, {
         url,
         title: detectedTitle,
         transcript: summary,
-        cards,
-        sources: [],
-        createdAt: Date.now()
-      };
+        cards
+      });
 
       setVideoSets(prev => [newSet, ...prev]);
       setCurrentSetId(newSet.id);
       setView('setDetail');
-
-      // 🚀 新增：當單字卡生成成功，在畫面上秀出來的同時，背景自動同步一份到 Supabase！
-      if (cards && cards.length > 0) {
-        try {
-          // 1. 安全撈取目前瀏覽器登入的 Google 用戶帳號
-          const { data: { user } } = await supabase.auth.getUser();
-          
-          if (user) {
-            // 2. 打包資料，欄位名稱百分之百精準對齊你的儲存表！
-            const cardsToInsert = cards.map((card: any) => ({
-              user_id: user.id,                          // 認證層用戶 ID
-              word: card.word || '',                     // 英文單字
-              definition: card.englishDefinition || '',  // 英文解釋
-              example_sentence: card.example || '',       // 例句
-              translation: card.translation || '',       // 中文翻譯
-              part_of_speech: card.partOfSpeech || 'n/a', // 詞性
-              cefr_level: card.cefrLevel || 'B2'         // CEFR 分級
-            }));
-
-            // 3. 一槍送進 Supabase 雲端
-            const { error: supabaseError } = await supabase
-              .from('flashcards')
-              .insert(cardsToInsert);
-
-            if (supabaseError) {
-              console.error("❌ Supabase 雲端存檔失敗:", supabaseError.message);
-            } else {
-              console.log(`✅ 成功同步將 ${cardsToInsert.length} 張單字卡寫入 Supabase 資料庫！`);
-            }
-          } else {
-            console.warn("⚠️ 偵測到目前未處於登入狀態，單字卡僅存在本地 LocalStorage 中。");
-          }
-        } catch (dbError) {
-          console.error("🚨 執行 Supabase 自動儲存時發生例外異常:", dbError);
-        }
-      }
-      
     } catch (error: any) {
       showCustomAlert(t.analyzeFailed, error.message || t.analyzeFailedDetail);
     } finally {
@@ -267,32 +268,39 @@ const App: React.FC = () => {
     }
   };
 
-  const addManualCard = (e: React.FormEvent) => {
+  const addManualCard = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentSetId || !manualWord.word || !manualWord.trans) return;
+    if (!session || !currentSetId || !manualWord.word || !manualWord.trans) return;
 
-    const newCard: Flashcard = {
-      id: `manual-${Date.now()}`,
-      word: manualWord.word,
-      partOfSpeech: manualWord.pos,
-      translation: manualWord.trans,
-      example: manualWord.example || (locale === 'zh' ? '使用者手動新增的單字' : 'Manually added word'),
-      status: 'new',
-      englishDefinition: manualWord.englishDefinition || ''
-    };
+    try {
+      const newCard = await dataService.insertCard(session.user.id, currentSetId, {
+        word: manualWord.word,
+        partOfSpeech: manualWord.pos,
+        translation: manualWord.trans,
+        example: manualWord.example || (locale === 'zh' ? '使用者手動新增的單字' : 'Manually added word'),
+        status: 'new',
+        englishDefinition: manualWord.englishDefinition || ''
+      });
 
-    setVideoSets(prev => prev.map(set => {
-      if (set.id === currentSetId) {
-        return { ...set, cards: [...set.cards, newCard] };
-      }
-      return set;
-    }));
+      setVideoSets(prev => prev.map(set => {
+        if (set.id === currentSetId) {
+          return { ...set, cards: [...set.cards, newCard] };
+        }
+        return set;
+      }));
 
-    setManualWord({ word: '', pos: 'n.', trans: '', example: '', englishDefinition: '' });
-    setShowManualForm(false);
+      setManualWord({ word: '', pos: 'n.', trans: '', example: '', englishDefinition: '' });
+      setShowManualForm(false);
+    } catch (error: any) {
+      showCustomAlert(t.syncErrorTitle, error.message || t.syncErrorDetail);
+    }
   };
 
-  const updateCardStatus = (setId: string, cardId: string, status: 'learning' | 'learned') => {
+  const updateCardStatus = async (setId: string, cardId: string, status: 'learning' | 'learned') => {
+    const targetSet = videoSets.find(s => s.id === setId);
+    const targetCard = targetSet?.cards.find(c => c.id === cardId);
+    if (!targetCard) return;
+
     setVideoSets(prev => prev.map(set => {
       if (set.id === setId) {
         return {
@@ -302,6 +310,12 @@ const App: React.FC = () => {
       }
       return set;
     }));
+
+    try {
+      await dataService.updateCard({ ...targetCard, status });
+    } catch (error: any) {
+      showCustomAlert(t.syncErrorTitle, error.message || t.syncErrorDetail);
+    }
   };
 
   const handleSwipe = (status: 'learning' | 'learned') => {
@@ -333,15 +347,20 @@ const App: React.FC = () => {
 
   const deleteSet = (e: React.MouseEvent, setId: string) => {
     e.stopPropagation();
-    showCustomConfirm(t.deleteSetTitle, t.deleteSetConfirm, () => {
+    showCustomConfirm(t.deleteSetTitle, t.deleteSetConfirm, async () => {
       setVideoSets(prev => prev.filter(s => s.id !== setId));
+      try {
+        await dataService.deleteVideoSet(setId);
+      } catch (error: any) {
+        showCustomAlert(t.syncErrorTitle, error.message || t.syncErrorDetail);
+      }
     });
   };
 
   const handleDeleteCard = (cardId: string, confirmRequired = true) => {
     if (!currentSetId) return;
-    
-    const performDeletion = () => {
+
+    const performDeletion = async () => {
       setVideoSets(prev => prev.map(set => {
         if (set.id === currentSetId) {
           return {
@@ -351,6 +370,12 @@ const App: React.FC = () => {
         }
         return set;
       }));
+
+      try {
+        await dataService.deleteCard(cardId);
+      } catch (error: any) {
+        showCustomAlert(t.syncErrorTitle, error.message || t.syncErrorDetail);
+      }
     };
 
     if (confirmRequired) {
@@ -360,7 +385,7 @@ const App: React.FC = () => {
     }
   };
 
-  // 數據管理功能
+  // 數據管理功能（僅供本地匯出備份）
   const exportAsFile = () => {
     const dataStr = JSON.stringify(videoSets, null, 2);
     const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
@@ -377,46 +402,35 @@ const App: React.FC = () => {
     });
   };
 
-  const handleImportText = () => {
-    try {
-      const importedData = JSON.parse(importText.trim());
-      if (Array.isArray(importedData)) {
-        setVideoSets(importedData);
-        showCustomAlert(t.restoreSuccess, t.restoreSuccessBody);
-        setImportText('');
-        setShowConfig(false);
-      } else {
-        showCustomAlert(t.invalidFormat, t.invalidFormatDetail);
-      }
-    } catch (err) {
-      showCustomAlert(t.formatError, t.formatErrorDetail);
-    }
-  };
-
-  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fileReader = new FileReader();
-    const file = e.target.files?.[0];
-    if (!file) return;
-    fileReader.onload = (event) => {
-      try {
-        const importedData = JSON.parse(event.target?.result as string);
-        if (Array.isArray(importedData)) {
-          setVideoSets(importedData);
-          showCustomAlert(t.restoreSuccess, t.restoreSuccessFile);
-          setShowConfig(false);
-        } else {
-          showCustomAlert(t.restoreFailed, t.restoreFailedDetail);
-        }
-      } catch (err) {
-        showCustomAlert(t.restoreFailed, t.restoreFailedCorrupted);
-      }
-    };
-    fileReader.readAsText(file);
-  };
-
   const currentSet = videoSets.find(s => s.id === currentSetId);
 
-  if (isInitializing) return <div className="min-h-screen bg-slate-50 flex items-center justify-center font-bold text-slate-400">{t.loading}</div>;
+  if (isAuthLoading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center font-bold text-slate-400">{t.loading}</div>;
+
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="bg-white w-full max-w-md rounded-[2.5rem] p-10 shadow-2xl text-center">
+          <AppLogo size={56} className="shadow-md mx-auto mb-6" />
+          <h1 className="text-2xl font-black text-slate-900 mb-2">{t.loginTitle}</h1>
+          <p className="text-slate-500 text-sm mb-8 leading-relaxed">{t.loginSubtitle}</p>
+          <button
+            onClick={handleSignIn}
+            className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-lg shadow-slate-200 active:scale-95 transition-all flex items-center justify-center gap-2"
+          >
+            🔐 {t.signInWithGoogleBtn}
+          </button>
+          <button
+            onClick={() => setLocale(locale === 'zh' ? 'en' : 'zh')}
+            className="mt-4 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-sm font-black"
+          >
+            🌐 {locale === 'zh' ? 'English' : '繁中'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isDataLoading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center font-bold text-slate-400">{t.loading}</div>;
 
   return (
     <div className="min-h-screen bg-slate-50 pb-32 px-4 pt-8 md:pt-12 relative animate-in fade-in duration-300">
@@ -544,35 +558,14 @@ const App: React.FC = () => {
 
             <div className="h-px bg-slate-100 mb-8" />
 
-            {/* 備份還原區塊 */}
-            <div className="space-y-6">
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">{t.backupLabel}</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button onClick={copyDataToClipboard} className="py-4 bg-indigo-50 text-indigo-600 rounded-2xl font-bold text-sm hover:bg-indigo-100 transition-all border border-indigo-100">{t.copyDataCode}</button>
-                  <button onClick={exportAsFile} className="py-4 bg-slate-50 text-slate-600 rounded-2xl font-bold text-sm hover:bg-slate-100 transition-all border border-slate-200">{t.downloadJson}</button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">{t.restoreLabel}</label>
-                <textarea 
-                  className="w-full h-24 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-mono"
-                  placeholder={t.restorePlaceholder}
-                  value={importText}
-                  onChange={(e) => setImportText(e.target.value)}
-                />
-                <div className="mt-3 flex gap-2">
-                  <button onClick={handleImportText} className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold shadow-lg shadow-emerald-100 active:scale-95 transition-all">{t.pasteRestore}</button>
-                  <input type="file" ref={fileInputRef} onChange={handleImportFile} accept=".json" className="hidden" />
-                  <button onClick={() => fileInputRef.current?.click()} className="px-6 py-4 bg-white text-emerald-600 border border-emerald-100 rounded-2xl font-bold active:scale-95 transition-all">{t.fileRestore}</button>
-                </div>
+            {/* 匯出備份區塊 */}
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">{t.backupLabel}</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={copyDataToClipboard} className="py-4 bg-indigo-50 text-indigo-600 rounded-2xl font-bold text-sm hover:bg-indigo-100 transition-all border border-indigo-100">{t.copyDataCode}</button>
+                <button onClick={exportAsFile} className="py-4 bg-slate-50 text-slate-600 rounded-2xl font-bold text-sm hover:bg-slate-100 transition-all border border-slate-200">{t.downloadJson}</button>
               </div>
             </div>
-
-            <p className="mt-8 text-[11px] text-slate-400 leading-relaxed font-medium">
-              {t.importantWarning}
-            </p>
           </div>
         </div>
       )}
@@ -603,6 +596,9 @@ const App: React.FC = () => {
             {t.settings}
           </button>
           {view !== 'home' && <button onClick={() => setView('home')} className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-sm font-bold border border-indigo-100 transition-all active:scale-95">{t.backHome}</button>}
+          <button onClick={handleSignOut} className="px-4 py-2 bg-white text-slate-600 rounded-xl text-sm font-bold shadow-sm border border-slate-200 hover:bg-slate-50 transition-all" title={session?.user?.email || ''}>
+            {t.signOutBtn}
+          </button>
         </div>
       </header>
 

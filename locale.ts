@@ -9,11 +9,23 @@ export const translations = {
     settings: "⚙️ 設定",
     backHome: "返回首頁",
     myCollections: "我的單字收藏",
-    emptyCollections: "貼上連結，或點擊「設定」還原先前的備份紀錄！",
+    emptyCollections: "貼上 YouTube 連結，建立你的第一組單字收藏！",
     updated: "更新",
     wordsCount: "個單字",
     progress: "進度",
-    
+
+    // Auth
+    loginTitle: "登入 YTtoVocab",
+    loginSubtitle: "使用 Google 帳號登入，您的單字收藏將自動雲端同步保存",
+    signInWithGoogleBtn: "使用 Google 登入",
+    signOutBtn: "登出",
+    signInErrorTitle: "登入失敗",
+    signInErrorDetail: "Google 登入發生錯誤，請再試一次。",
+    syncErrorTitle: "同步失敗",
+    syncErrorDetail: "無法連接雲端資料庫，請稍後再試。",
+    loadDataErrorTitle: "讀取失敗",
+    loadDataErrorDetail: "無法載入您的單字收藏，請重新整理頁面再試一次。",
+
     // Config Center
     configTitle: "YTtoVocab 系統設定與數據中心",
     defaultGemini: "Gemini (預設)",
@@ -25,15 +37,10 @@ export const translations = {
     supadataKeyLabel: "Supadata API 金鑰 (獲取影片內容 - 選填)",
     supadataKeyNote: "註：請至 supadata.ai 申請免費 Key",
     saveSettings: "儲存設定",
-    backupLabel: "備份數據 (防遺失必備)",
+    backupLabel: "匯出備份",
     copyDataCode: "一鍵複製數據碼",
     downloadJson: "下載 JSON 檔案",
-    restoreLabel: "還原數據",
-    restorePlaceholder: "在此貼上您之前複製的數據碼...",
-    pasteRestore: "貼上還原",
-    fileRestore: "選擇檔案還原",
-    importantWarning: "💡 重要提醒：由於瀏覽器安全限制，資料是跟隨網址儲存的。若網址（URL）發生變動，舊資料會「隱形」。請務必養成隨手「複製數據碼」存放在記事本的習慣。",
-    
+
     // Alert / Dialog
     confirm: "確定",
     cancel: "取消",
@@ -52,16 +59,6 @@ export const translations = {
     deleteCardConfirm: "確定要刪除此單字卡嗎？",
     copiedTitle: "複製成功",
     copiedDetail: "所有單字數據已成功複製到剪貼簿！您可以將其貼在記事本中妥善保存。",
-    restoreSuccess: "還原成功",
-    restoreSuccessBody: "已成功從備份數據碼還原所有單字收藏！",
-    restoreSuccessFile: "已成功從 JSON 備份檔案還原所有單字收藏！",
-    invalidFormat: "格式不正確",
-    invalidFormatDetail: "貼上的數據並非有效的單字集陣列，請重新確認。",
-    formatError: "格式錯誤",
-    formatErrorDetail: "無效的數據格式，請確認是否複製完整。",
-    restoreFailed: "還原失敗",
-    restoreFailedDetail: "檔案內容結構不符，無法還原。",
-    restoreFailedCorrupted: "檔案讀取或解析失敗，可能檔案已損壞。",
 
     // Set Detail
     reviewAll: "全部複習",
@@ -132,10 +129,22 @@ export const translations = {
     settings: "⚙️ Settings",
     backHome: "Back to Home",
     myCollections: "My Collections",
-    emptyCollections: "Paste a video link, or click \"Settings\" to restore previous backup data!",
+    emptyCollections: "Paste a YouTube link to build your first collection!",
     updated: "Updated",
     wordsCount: "words",
     progress: "Progress",
+
+    // Auth
+    loginTitle: "Sign in to YTtoVocab",
+    loginSubtitle: "Sign in with Google to keep your vocabulary collections synced to the cloud",
+    signInWithGoogleBtn: "Sign in with Google",
+    signOutBtn: "Sign Out",
+    signInErrorTitle: "Sign-in Failed",
+    signInErrorDetail: "An error occurred during Google sign-in. Please try again.",
+    syncErrorTitle: "Sync Failed",
+    syncErrorDetail: "Could not connect to the cloud database. Please try again later.",
+    loadDataErrorTitle: "Load Failed",
+    loadDataErrorDetail: "Could not load your vocabulary collections. Please refresh the page and try again.",
 
     // Config Center
     configTitle: "YTtoVocab Settings & Data Hub",
@@ -148,14 +157,9 @@ export const translations = {
     supadataKeyLabel: "Supadata API Key (Optional)",
     supadataKeyNote: "Note: Sign up at supadata.ai to get a free key for video content parsing",
     saveSettings: "Save Settings",
-    backupLabel: "Backup Data (Guards against loss)",
+    backupLabel: "Export Backup",
     copyDataCode: "Copy Data Code",
     downloadJson: "Download JSON File",
-    restoreLabel: "Restore Data",
-    restorePlaceholder: "Paste your previously copied backup code here...",
-    pasteRestore: "Paste to Restore",
-    fileRestore: "Select JSON File",
-    importantWarning: "💡 Important Note: Due to browser security restrictions, data is stored per application URL, so migrating domains can hide old cards. Please back up your 'Data Code' regularly.",
 
     // Alert / Dialog
     confirm: "Confirm",
@@ -175,16 +179,6 @@ export const translations = {
     deleteCardConfirm: "Are you sure you want to delete this flashcard?",
     copiedTitle: "Copied Successfully",
     copiedDetail: "All vocabulary data has been successfully copied to your clipboard! Paste it into a text file for safe keeping.",
-    restoreSuccess: "Restored Successfully",
-    restoreSuccessBody: "Successfully restored all vocabulary collections from backup code!",
-    restoreSuccessFile: "Successfully restored all vocabulary collections from JSON file!",
-    invalidFormat: "Invalid Format",
-    invalidFormatDetail: "The pasted data is not a valid vocabulary array. Please check.",
-    formatError: "Format Error",
-    formatErrorDetail: "Failed to parse data format, please ensure it was copied completely.",
-    restoreFailed: "Restore Failed",
-    restoreFailedDetail: "File format/structure matches unrecognized schemas. Unable to restore.",
-    restoreFailedCorrupted: "Failed to read or parse file structure. It might be corrupted.",
 
     // Set Detail
     reviewAll: "Review All",
