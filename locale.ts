@@ -59,6 +59,9 @@ export const translations = {
     deleteCardConfirm: "確定要刪除此單字卡嗎？",
     copiedTitle: "複製成功",
     copiedDetail: "所有單字數據已成功複製到剪貼簿！您可以將其貼在記事本中妥善保存。",
+    alreadyConvertedTitle: "提示",
+    alreadyConvertedDetail: "本影片已經轉換過囉！",
+    okBtn: "好",
 
     // Set Detail
     reviewAll: "全部複習",
@@ -179,6 +182,9 @@ export const translations = {
     deleteCardConfirm: "Are you sure you want to delete this flashcard?",
     copiedTitle: "Copied Successfully",
     copiedDetail: "All vocabulary data has been successfully copied to your clipboard! Paste it into a text file for safe keeping.",
+    alreadyConvertedTitle: "Notice",
+    alreadyConvertedDetail: "This video has already been converted!",
+    okBtn: "OK",
 
     // Set Detail
     reviewAll: "Review All",

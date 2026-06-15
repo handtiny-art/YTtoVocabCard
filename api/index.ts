@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
 import OpenAI from "openai";
+import { createClient } from "@supabase/supabase-js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,6 +14,18 @@ if (process.env.NODE_ENV !== "production") {
   } catch {
     // .env.local is optional
   }
+}
+
+// 伺服器端 Supabase client（使用 service role key，可繞過 RLS），用於讀寫共享的影片快取。
+// 若未設定 SUPABASE_SERVICE_ROLE_KEY，快取功能會自動停用，不影響其他功能。
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseAdmin = (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY)
+  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  : null;
+
+if (!supabaseAdmin) {
+  console.warn("[Server] SUPABASE_SERVICE_ROLE_KEY 未設定，影片快取功能停用。");
 }
 
 async function createServer() {
@@ -32,9 +45,28 @@ async function createServer() {
     console.log(`[Server] Processing Video ID: ${videoId}`);
 
     try {
+      // 先查共享快取，命中則直接回傳，不消耗 Supadata 額度
+      if (supabaseAdmin) {
+        const { data: cached } = await supabaseAdmin
+          .from('video_cache')
+          .select('title, transcript')
+          .eq('video_id', videoId)
+          .maybeSingle();
+
+        if (cached?.transcript) {
+          console.log(`[Server] Cache hit for transcript: ${videoId}`);
+          return res.json({
+            transcript: cached.transcript,
+            title: cached.title || "YouTube Video",
+            videoId,
+            cached: true,
+          });
+        }
+      }
+
       const SUPADATA_API_KEY = (req.headers['x-supadata-key'] as string)
-        || (process.env.NODE_ENV !== "production" ? process.env.SUPADATA_API_KEY : undefined);
-      
+        || process.env.SUPADATA_API_KEY;
+
       if (!SUPADATA_API_KEY) {
         throw new Error("尚未設定 Supadata API Key。請在設定頁面中填入。");
       }
@@ -70,7 +102,16 @@ async function createServer() {
 
       console.log(`[Server] Success. Transcript length: ${fullText.length}`);
 
-      res.json({ 
+      if (supabaseAdmin) {
+        supabaseAdmin
+          .from('video_cache')
+          .upsert({ video_id: videoId, title, transcript: fullText, updated_at: new Date().toISOString() })
+          .then(({ error }) => {
+            if (error) console.error("[Server] Failed to cache transcript:", error.message);
+          });
+      }
+
+      res.json({
         transcript: fullText,
         title: title,
         videoId: videoId
@@ -83,10 +124,24 @@ async function createServer() {
 
   // API route to analyze transcript using Gemini or OpenAI
   app.post("/api/analyze", async (req, res) => {
-    const { transcript, title, provider, geminiKey, openaiKey } = req.body;
+    const { transcript, title, provider, geminiKey, openaiKey, videoId } = req.body;
 
     if (!transcript) {
       return res.status(400).json({ error: "Missing transcript" });
+    }
+
+    // 先查共享快取，命中則直接回傳，不消耗 Gemini/OpenAI 額度
+    if (videoId && supabaseAdmin) {
+      const { data: cached } = await supabaseAdmin
+        .from('video_cache')
+        .select('summary, vocabulary')
+        .eq('video_id', videoId)
+        .maybeSingle();
+
+      if (cached?.vocabulary) {
+        console.log(`[Server] Cache hit for analysis: ${videoId}`);
+        return res.json({ summary: cached.summary, vocabulary: cached.vocabulary, cached: true });
+      }
     }
 
     const systemInstruction = `你是一位專精於 CEFR 分級的資深英語老師。
@@ -113,9 +168,19 @@ async function createServer() {
     const truncatedTranscript = transcript.substring(0, 8000);
     const userPrompt = `影片標題：${title || "YouTube Video"}\n逐字稿內容：\n---\n${truncatedTranscript}\n---`;
 
+    const cacheVocabulary = (parsed: { summary: string; vocabulary: unknown }) => {
+      if (videoId && supabaseAdmin) {
+        supabaseAdmin
+          .from('video_cache')
+          .upsert({ video_id: videoId, summary: parsed.summary, vocabulary: parsed.vocabulary, updated_at: new Date().toISOString() })
+          .then(({ error }) => {
+            if (error) console.error("[Server] Failed to cache analysis:", error.message);
+          });
+      }
+    };
+
     if (provider === 'openai') {
-      const apiKey = openaiKey
-        || (process.env.NODE_ENV !== "production" ? process.env.OPENAI_API_KEY : undefined);
+      const apiKey = openaiKey || process.env.OPENAI_API_KEY;
       if (!apiKey) {
         return res.status(400).json({ error: "尚未設定 OpenAI API Key。請在設定頁面中填寫。" });
       }
@@ -132,6 +197,7 @@ async function createServer() {
         const content = completion.choices[0]?.message?.content;
         if (!content) throw new Error("OpenAI 沒有返回任何內容。");
         const parsed = JSON.parse(content);
+        cacheVocabulary(parsed);
         return res.json(parsed);
       } catch (error: any) {
         console.error("OpenAI server error:", error);
@@ -139,8 +205,7 @@ async function createServer() {
       }
     } else {
       // Gemini
-      const apiKey = geminiKey
-        || (process.env.NODE_ENV !== "production" ? process.env.GEMINI_API_KEY : undefined);
+      const apiKey = geminiKey || process.env.GEMINI_API_KEY;
       if (!apiKey) {
         return res.status(400).json({ error: "尚未設定 Gemini API Key。請在設定頁面中填寫。" });
       }
@@ -157,6 +222,7 @@ async function createServer() {
         const content = response.text;
         if (!content) throw new Error("Gemini 沒有返回任何內容。");
         const parsed = JSON.parse(content);
+        cacheVocabulary(parsed);
         return res.json(parsed);
       } catch (error: any) {
         console.error("Gemini server error:", error);

@@ -10,6 +10,7 @@ import { translations, LocaleType } from './locale';
 import { speakWord } from './utils/speech';
 import { supabase } from './services/supabaseClient';
 import * as dataService from './services/dataService';
+import { REQUIRE_USER_API_KEY } from './config';
 
 const App: React.FC = () => {
   const [locale, setLocale] = useState<LocaleType>(() => {
@@ -95,18 +96,23 @@ const App: React.FC = () => {
     });
   };
 
-  const showCustomAlert = (title: string, message: string, onConfirmAction?: () => void) => {
+  const showCustomAlert = (title: string, message: string, onConfirmAction?: () => void, confirmText = t.confirm) => {
     setConfirmModal({
       isOpen: true,
       title,
       message,
-      confirmText: t.confirm,
+      confirmText,
       onConfirm: () => {
         if (onConfirmAction) onConfirmAction();
         setConfirmModal(prev => ({ ...prev, isOpen: false }));
       },
       isAlert: true
     });
+  };
+
+  const extractVideoId = (url: string): string => {
+    const match = url.match(/(?:v=|\/)([0-9A-Za-z_-]{11}).*/);
+    return match ? match[1] : url;
   };
 
   const handleOpenCard = (card: Flashcard) => {
@@ -233,12 +239,24 @@ const App: React.FC = () => {
 
   const handleProcessVideo = async (url: string) => {
     if (!session) return;
+
+    // 若使用者自己已經轉換過同一支影片，直接跳到舊的單字卡組，避免重複轉換
+    const videoId = extractVideoId(url);
+    const existingSet = videoSets.find(s => extractVideoId(s.url) === videoId);
+    if (existingSet) {
+      showCustomAlert(t.alreadyConvertedTitle, t.alreadyConvertedDetail, () => {
+        setCurrentSetId(existingSet.id);
+        setView('setDetail');
+      }, t.okBtn);
+      return;
+    }
+
     setIsLoading(true);
     setLoadingStep('fetching');
 
     try {
       // 階段 1: 獲取逐字稿
-      const { transcript, detectedTitle } = await fetchTranscript(url, supadataKey);
+      const { transcript, detectedTitle, videoId } = await fetchTranscript(url, supadataKey);
 
       setLoadingStep('analyzing');
 
@@ -246,7 +264,8 @@ const App: React.FC = () => {
       const { summary, cards } = await analyzeTranscript(transcript, detectedTitle, {
         provider: aiProvider,
         geminiKey: currentKey,
-        openaiKey: openaiKey
+        openaiKey: openaiKey,
+        videoId
       });
 
       // 階段 3: 寫入 Supabase（video_sets + flashcards）
@@ -445,7 +464,8 @@ const App: React.FC = () => {
               {t.configTitle}
             </h3>
 
-            {/* AI 狀態與金鑰區塊 */}
+            {/* AI 狀態與金鑰區塊（僅在允許使用者自填 API Key 時顯示） */}
+            {REQUIRE_USER_API_KEY && (
             <div className="mb-10 space-y-6">
               <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl mb-6">
                 <button 
@@ -555,6 +575,7 @@ const App: React.FC = () => {
                 <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold active:scale-95 transition-all shadow-lg shadow-slate-100">{t.saveSettings}</button>
               </form>
             </div>
+            )}
 
             <div className="h-px bg-slate-100 mb-8" />
 

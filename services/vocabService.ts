@@ -81,12 +81,13 @@ export const fetchTranscript = async (url: string, supadataKey?: string): Promis
  * 第二階段：使用 AI 進行分析 (一律導向安全後端 api)
  */
 export const analyzeTranscript = async (
-  transcript: string, 
-  title: string, 
-  config: { 
-    provider: 'gemini' | 'openai', 
-    geminiKey?: string, 
-    openaiKey?: string 
+  transcript: string,
+  title: string,
+  config: {
+    provider: 'gemini' | 'openai',
+    geminiKey?: string,
+    openaiKey?: string,
+    videoId?: string
   }
 ): Promise<{ summary: string, cards: Flashcard[] }> => {
   console.log(`[VocabService] 階段 2: 正在透過後端 API 執行 ${config.provider} AI 分析...`);
@@ -102,7 +103,8 @@ export const analyzeTranscript = async (
         title,
         provider: config.provider,
         geminiKey: config.geminiKey,
-        openaiKey: config.openaiKey
+        openaiKey: config.openaiKey,
+        videoId: config.videoId
       })
     });
 
