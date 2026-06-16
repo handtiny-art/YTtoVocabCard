@@ -4,7 +4,7 @@ export const translations = {
   zh: {
     loading: "載入中...",
     title: "YTtoVocab",
-    subtitle: "YouTube 影片單字大師",
+    subtitle: "輕鬆將 YouTube 影片轉為單字卡！",
     autosaved: "資料已即時存檔",
     settings: "⚙️ 設定",
     backHome: "返回首頁",
