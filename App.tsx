@@ -50,7 +50,6 @@ const App: React.FC = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [view, setView] = useState<'home' | 'setDetail' | 'learning' | 'summary'>('home');
   
-  const [showConfig, setShowConfig] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState(() => localStorage.getItem('VOCAB_MASTER_GEMINI_KEY') || '');
   const [openaiKeyInput, setOpenaiKeyInput] = useState(() => localStorage.getItem('VOCAB_MASTER_OPENAI_KEY') || '');
   const [supadataKeyInput, setSupadataKeyInput] = useState(() => localStorage.getItem('VOCAB_MASTER_SUPADATA_KEY') || '');
@@ -229,9 +228,6 @@ const App: React.FC = () => {
       localStorage.setItem('VOCAB_MASTER_SUPADATA_KEY', cleanSupadataKey);
       message += locale === 'zh' ? "Supadata API 金鑰已變更\n" : "Supadata API Key updated\n";
     }
-
-    // 關閉設定與數據中心彈窗
-    setShowConfig(false);
 
     // 顯示自定義設定成功提示
     const alertBody = message ? `${message}\n${t.settingsSavedDetail}` : t.settingsSavedDetail;
@@ -472,142 +468,6 @@ const App: React.FC = () => {
       )}
 
       {/* 設定與數據中心彈窗 */}
-      {showConfig && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-8 shadow-2xl relative animate-in zoom-in duration-300 max-h-[90vh] overflow-y-auto">
-            <button onClick={() => setShowConfig(false)} className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 bg-slate-100 w-10 h-10 rounded-full flex items-center justify-center transition-all">✕</button>
-            
-            <h3 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-3">
-              <AppLogo size={36} className="shadow-sm" />
-              {t.configTitle}
-            </h3>
-
-            {/* AI 狀態與金鑰區塊（僅在允許使用者自填 API Key 時顯示） */}
-            {REQUIRE_USER_API_KEY && (
-            <div className="mb-10 space-y-6">
-              <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl mb-6">
-                <button 
-                  onClick={() => {
-                    setAiProvider('gemini');
-                    localStorage.setItem('VOCAB_MASTER_AI_PROVIDER', 'gemini');
-                  }}
-                  className={`flex-1 py-3 rounded-xl font-black text-xs transition-all ${aiProvider === 'gemini' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400'}`}
-                >
-                  {t.defaultGemini}
-                </button>
-                <button 
-                  onClick={() => {
-                    setAiProvider('openai');
-                    localStorage.setItem('VOCAB_MASTER_AI_PROVIDER', 'openai');
-                  }}
-                  className={`flex-1 py-3 rounded-xl font-black text-xs transition-all ${aiProvider === 'openai' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
-                >
-                  {t.chatGpt}
-                </button>
-              </div>
-
-              <form onSubmit={handleSaveKey} className="space-y-6">
-                {aiProvider === 'gemini' ? (
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">{t.geminiKeyLabel}</label>
-                    <div className="relative">
-                      <input 
-                        type={showApiKey ? "text" : "password"}
-                        placeholder={locale === 'zh' ? "貼上 Gemini API Key..." : "Paste Gemini API Key..."}
-                        value={apiKeyInput}
-                        onChange={(e) => setApiKeyInput(e.target.value)}
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 pr-12"
-                      />
-                      <button 
-                        type="button"
-                        onClick={() => setShowApiKey(!showApiKey)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                      >
-                        {showApiKey ? "👁️" : "👁️‍🗨️"}
-                      </button>
-                    </div>
-                    <p className="mt-2 text-[10px] text-slate-400 ml-1">
-                      {locale === 'zh' ? (
-                        <>註：若留空則使用系統預設免費額度此處為選填。請至 <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-emerald-500 underline font-bold">AI Studio</a> 申請</>
-                      ) : (
-                        <>Note: Leave blank to use system default free limits. Obtain keys from <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-emerald-500 underline font-bold">AI Studio</a></>
-                      )}
-                    </p>
-                  </div>
-                ) : (
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">{t.openaiKeyLabel}</label>
-                    <div className="relative">
-                      <input 
-                        type={showOpenaiKey ? "text" : "password"}
-                        placeholder="貼上 OpenAI API Key..."
-                        value={openaiKeyInput}
-                        onChange={(e) => setOpenaiKeyInput(e.target.value)}
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 pr-12"
-                      />
-                      <button 
-                        type="button"
-                        onClick={() => setShowOpenaiKey(!showOpenaiKey)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-605"
-                      >
-                        {showOpenaiKey ? "👁️" : "👁️‍🗨️"}
-                      </button>
-                    </div>
-                    <p className="mt-2 text-[10px] text-slate-400 ml-1">
-                      {locale === 'zh' ? (
-                        <>註：使用 ChatGPT 可以選填此 API Key，留空則嘗試以伺服器預設對接。請至 <a href="https://platform.openai.com/api-keys" target="_blank" className="text-blue-500 underline font-bold">OpenAI Platform</a> 申請</>
-                      ) : (
-                        <>Note: Leave blank to attempt using system default proxy. Obtain keys from <a href="https://platform.openai.com/api-keys" target="_blank" className="text-blue-500 underline font-bold">OpenAI Platform</a></>
-                      )}
-                    </p>
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">{t.supadataKeyLabel}</label>
-                  <div className="relative">
-                    <input 
-                      type={showSupadataKey ? "text" : "password"}
-                      placeholder="貼上 Supadata API Key..."
-                      value={supadataKeyInput}
-                      onChange={(e) => setSupadataKeyInput(e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 pr-12"
-                    />
-                    <button 
-                      type="button"
-                      onClick={() => setShowSupadataKey(!showSupadataKey)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    >
-                      {showSupadataKey ? "👁️" : "👁️‍🗨️"}
-                    </button>
-                  </div>
-                  <p className="mt-2 text-[10px] text-slate-400 ml-1">
-                    {locale === 'zh' ? (
-                      <>註：請至 <a href="https://supadata.ai" target="_blank" className="text-emerald-500 underline font-bold">supadata.ai</a> 申請免費 Key</>
-                    ) : (
-                      <>Note: Register at <a href="https://supadata.ai" target="_blank" className="text-emerald-500 underline font-bold">supadata.ai</a> to get a free key</>
-                    )}
-                  </p>
-                </div>
-
-                <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold active:scale-95 transition-all shadow-lg shadow-slate-100">{t.saveSettings}</button>
-              </form>
-            </div>
-            )}
-
-            <div className="h-px bg-slate-100 mb-8" />
-
-            {/* 匯出備份區塊 */}
-            <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">{t.backupLabel}</label>
-              <div className="grid grid-cols-2 gap-3">
-                <button onClick={copyDataToClipboard} className="py-4 bg-indigo-50 text-indigo-600 rounded-2xl font-bold text-sm hover:bg-indigo-100 transition-all border border-indigo-100">{t.copyDataCode}</button>
-                <button onClick={exportAsFile} className="py-4 bg-slate-50 text-slate-600 rounded-2xl font-bold text-sm hover:bg-slate-100 transition-all border border-slate-200">{t.downloadJson}</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       <header className="max-w-4xl mx-auto mb-8 flex items-center justify-between">
         <div className="cursor-pointer flex items-center gap-3.5" onClick={() => setView('home')}>
@@ -630,12 +490,6 @@ const App: React.FC = () => {
             title={locale === 'zh' ? 'Switch to English' : '切換至繁中'}
           >
             🌐 {locale === 'zh' ? 'English' : '繁中'}
-          </button>
-          <button onClick={() => setShowFeedback(true)} className="px-4 py-2 bg-white text-slate-600 rounded-xl text-sm font-bold shadow-sm border border-slate-200 hover:bg-slate-50 transition-all">
-            💬 {t.feedbackBtn}
-          </button>
-          <button onClick={() => setShowConfig(true)} className="px-4 py-2 bg-white text-slate-600 rounded-xl text-sm font-bold shadow-sm border border-slate-200 flex items-center gap-2 hover:bg-slate-50 transition-all">
-            {t.settings}
           </button>
           {view !== 'home' && <button onClick={() => setView('home')} className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-sm font-bold border border-indigo-100 transition-all active:scale-95">{t.backHome}</button>}
           <button onClick={handleSignOut} className="px-4 py-2 bg-white text-slate-600 rounded-xl text-sm font-bold shadow-sm border border-slate-200 hover:bg-slate-50 transition-all" title={session?.user?.email || ''}>
@@ -839,6 +693,12 @@ const App: React.FC = () => {
           </div>
         )}
       </main>
+
+      <footer className="max-w-4xl mx-auto mt-16 pb-10 flex justify-center">
+        <button onClick={() => setShowFeedback(true)} className="px-5 py-2.5 bg-white text-slate-500 rounded-xl text-sm font-bold shadow-sm border border-slate-200 hover:bg-slate-50 transition-all">
+          💬 {t.feedbackBtn}
+        </button>
+      </footer>
 
       {/* 獨立單字卡詳細與編輯彈窗 */}
       {selectedCard && editForm && (
