@@ -140,7 +140,7 @@ export const translations = {
   en: {
     loading: "Loading...",
     title: "YTtoVocab",
-    subtitle: "YouTube Video Vocabulary Master",
+    subtitle: "YouTube Video to Flashcards",
     autosaved: "Saved in real-time",
     settings: "⚙️ Settings",
     backHome: "Back to Home",
