@@ -130,6 +130,17 @@ async function createServer() {
       return res.status(400).json({ error: "Missing transcript" });
     }
 
+    // 每週額度檢查（快取命中時跳過，因為不消耗 API 費用）
+    const WEEKLY_LIMIT = 3;
+    const authHeader = req.headers['authorization'] as string;
+    const accessToken = authHeader?.replace('Bearer ', '');
+    let userId: string | null = null;
+
+    if (supabaseAdmin && accessToken) {
+      const { data: { user } } = await supabaseAdmin.auth.getUser(accessToken);
+      userId = user?.id ?? null;
+    }
+
     // 先查共享快取，命中則直接回傳，不消耗 Gemini/OpenAI 額度
     if (videoId && supabaseAdmin) {
       const { data: cached } = await supabaseAdmin
@@ -142,6 +153,49 @@ async function createServer() {
         console.log(`[Server] Cache hit for analysis: ${videoId}`);
         return res.json({ summary: cached.summary, vocabulary: cached.vocabulary, cached: true });
       }
+    }
+
+    // 額度檢查（只在需要真正呼叫 AI 時才計入）
+    if (supabaseAdmin && userId) {
+      const now = new Date();
+      const day = now.getUTCDay();
+      const daysFromMonday = day === 0 ? 6 : day - 1;
+      const weekStart = new Date(now);
+      weekStart.setUTCDate(now.getUTCDate() - daysFromMonday);
+      const weekStartStr = weekStart.toISOString().slice(0, 10);
+
+      const resetDate = new Date(weekStart);
+      resetDate.setUTCDate(weekStart.getUTCDate() + 7);
+      const resetDateStr = resetDate.toISOString().slice(0, 10);
+
+      const { data: usage } = await supabaseAdmin
+        .from('weekly_usage')
+        .select('conversion_count, exceeded_attempts')
+        .eq('user_id', userId)
+        .eq('week_start', weekStartStr)
+        .maybeSingle();
+
+      const count = usage?.conversion_count ?? 0;
+
+      if (count >= WEEKLY_LIMIT) {
+        await supabaseAdmin.from('weekly_usage').upsert({
+          user_id: userId,
+          week_start: weekStartStr,
+          conversion_count: count,
+          exceeded_attempts: (usage?.exceeded_attempts ?? 0) + 1,
+        }, { onConflict: 'user_id,week_start' });
+        console.log(`[Server] Quota exceeded for user ${userId} (${count}/${WEEKLY_LIMIT})`);
+        return res.status(429).json({ error: 'quota_exceeded', resetDate: resetDateStr });
+      }
+
+      // 額度扣除
+      await supabaseAdmin.from('weekly_usage').upsert({
+        user_id: userId,
+        week_start: weekStartStr,
+        conversion_count: count + 1,
+        exceeded_attempts: usage?.exceeded_attempts ?? 0,
+      }, { onConflict: 'user_id,week_start' });
+      console.log(`[Server] Usage recorded for user ${userId}: ${count + 1}/${WEEKLY_LIMIT}`);
     }
 
     const systemInstruction = `你是一位專精於 CEFR 分級的資深英語老師。

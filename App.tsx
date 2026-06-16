@@ -265,7 +265,8 @@ const App: React.FC = () => {
         provider: aiProvider,
         geminiKey: currentKey,
         openaiKey: openaiKey,
-        videoId
+        videoId,
+        accessToken: session.access_token
       });
 
       // 階段 3: 寫入 Supabase（video_sets + flashcards）
@@ -280,7 +281,14 @@ const App: React.FC = () => {
       setCurrentSetId(newSet.id);
       setView('setDetail');
     } catch (error: any) {
-      showCustomAlert(t.analyzeFailed, error.message || t.analyzeFailedDetail);
+      if (error.message === 'quota_exceeded') {
+        const resetDate = error.resetDate
+          ? new Date(error.resetDate).toLocaleDateString(locale === 'zh' ? 'zh-TW' : 'en-US', { month: 'long', day: 'numeric' })
+          : '';
+        showCustomAlert(t.quotaExceededTitle, t.quotaExceededDetail(resetDate), undefined, t.okBtn);
+      } else {
+        showCustomAlert(t.analyzeFailed, error.message || t.analyzeFailedDetail);
+      }
     } finally {
       setIsLoading(false);
       setLoadingStep('idle');

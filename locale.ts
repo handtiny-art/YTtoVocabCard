@@ -62,6 +62,8 @@ export const translations = {
     alreadyConvertedTitle: "提示",
     alreadyConvertedDetail: "本影片已經轉換過囉！",
     okBtn: "好",
+    quotaExceededTitle: "本週額度已用完",
+    quotaExceededDetail: (resetDate: string) => `你本週的 3 次免費轉換已全部用完！\n額度將於 ${resetDate}（週一）自動重置。`,
 
     // Set Detail
     reviewAll: "全部複習",
@@ -185,6 +187,8 @@ export const translations = {
     alreadyConvertedTitle: "Notice",
     alreadyConvertedDetail: "This video has already been converted!",
     okBtn: "OK",
+    quotaExceededTitle: "Weekly Limit Reached",
+    quotaExceededDetail: (resetDate: string) => `You've used all 3 free conversions this week.\nYour quota resets on ${resetDate} (Monday).`,
 
     // Set Detail
     reviewAll: "Review All",

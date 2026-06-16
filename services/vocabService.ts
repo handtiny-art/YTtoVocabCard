@@ -87,17 +87,19 @@ export const analyzeTranscript = async (
     provider: 'gemini' | 'openai',
     geminiKey?: string,
     openaiKey?: string,
-    videoId?: string
+    videoId?: string,
+    accessToken?: string
   }
 ): Promise<{ summary: string, cards: Flashcard[] }> => {
   console.log(`[VocabService] 階段 2: 正在透過後端 API 執行 ${config.provider} AI 分析...`);
 
   try {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (config.accessToken) headers['Authorization'] = `Bearer ${config.accessToken}`;
+
     const response = await fetch("/api/analyze", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers,
       body: JSON.stringify({
         transcript,
         title,
@@ -107,6 +109,13 @@ export const analyzeTranscript = async (
         videoId: config.videoId
       })
     });
+
+    if (response.status === 429) {
+      const errorJson = await response.json();
+      const err = new Error('quota_exceeded') as any;
+      err.resetDate = errorJson.resetDate;
+      throw err;
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
