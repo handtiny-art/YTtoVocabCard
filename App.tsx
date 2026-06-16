@@ -5,6 +5,7 @@ import { Flashcard, VideoSet } from './types';
 import YouTubeInput from './components/YouTubeInput';
 import FlashcardItem from './components/FlashcardItem';
 import { AppLogo } from './components/AppLogo';
+import AdBanner from './components/AdBanner';
 import { fetchTranscript, analyzeTranscript } from './services/vocabService';
 import { translations, LocaleType } from './locale';
 import { speakWord } from './utils/speech';
@@ -637,6 +638,9 @@ const App: React.FC = () => {
         {view === 'home' && (
           <div className="space-y-12">
             <YouTubeInput onProcess={handleProcessVideo} isLoading={isLoading} loadingStep={loadingStep} aiProvider={aiProvider} locale={locale} />
+            {isLoading && (
+              <AdBanner slot={import.meta.env.VITE_ADSENSE_SLOT_LOADING || ''} />
+            )}
             <div className="space-y-4">
               <h2 className="text-xl font-bold text-slate-800">{t.myCollections} ({videoSets.length})</h2>
               {videoSets.length === 0 ? (
@@ -645,8 +649,9 @@ const App: React.FC = () => {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {videoSets.map(set => (
-                    <div key={set.id} onClick={() => { setCurrentSetId(set.id); setView('setDetail'); }} className="group bg-white p-7 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:translate-y-[-4px] transition-all cursor-pointer relative">
+                  {videoSets.map((set) => (
+                    <React.Fragment key={set.id}>
+                    <div onClick={() => { setCurrentSetId(set.id); setView('setDetail'); }} className="group bg-white p-7 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:translate-y-[-4px] transition-all cursor-pointer relative">
                       <button onClick={(e) => deleteSet(e, set.id)} className="absolute top-6 right-6 text-slate-300 hover:text-red-500 p-2">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                       </button>
@@ -657,6 +662,7 @@ const App: React.FC = () => {
                         <span className="px-4 py-1.5 bg-emerald-50 text-emerald-600 text-[10px] font-black rounded-full uppercase tracking-wider">{t.progress}: {set.cards.filter(c => c.status === 'learned').length} / {set.cards.length}</span>
                       </div>
                     </div>
+                    </React.Fragment>
                   ))}
                 </div>
               )}
@@ -808,7 +814,7 @@ const App: React.FC = () => {
           <div className="bg-white p-16 rounded-[3rem] shadow-2xl border border-slate-50 text-center max-w-lg mx-auto animate-in zoom-in duration-500">
             <div className="w-28 h-28 bg-slate-900 text-white rounded-[2rem] flex items-center justify-center text-5xl mx-auto mb-10 shadow-2xl transform -rotate-6">🏆</div>
             <h2 className="text-3xl font-black text-slate-800 mb-4 tracking-tight">{t.sessionFinished}</h2>
-            <p className="text-slate-500 mb-12 leading-relaxed font-medium text-lg">
+            <p className="text-slate-500 mb-10 leading-relaxed font-medium text-lg">
               {t.sessionQuote.split('\n').map((line, idx) => (
                 <React.Fragment key={idx}>
                   {line}
@@ -816,6 +822,7 @@ const App: React.FC = () => {
                 </React.Fragment>
               ))}
             </p>
+            <AdBanner slot={import.meta.env.VITE_ADSENSE_SLOT_REVIEW || ''} className="mb-8 rounded-2xl overflow-hidden" />
             <button onClick={() => setView('setDetail')} className="w-full py-6 bg-slate-900 text-white rounded-2xl font-black text-xl shadow-xl shadow-slate-200 active:scale-95 transition-all">
               {t.backToListBtn}
             </button>
