@@ -63,7 +63,7 @@ export const translations = {
     alreadyConvertedDetail: "本影片已經轉換過囉！",
     okBtn: "好",
     quotaExceededTitle: "本週額度已用完",
-    quotaExceededDetail: (resetDate: string) => `你本週的 3 次免費轉換已全部用完！\n額度將於 ${resetDate}（週一）自動重置。`,
+    quotaExceededDetail: (_resetDate: string) => `您本週已轉換 3 部影片囉，下週才可以再繼續轉換喔！`,
 
     // Set Detail
     reviewAll: "全部複習",
