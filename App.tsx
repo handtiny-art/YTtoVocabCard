@@ -476,9 +476,7 @@ const App: React.FC = () => {
             <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
               YTtoVocab
             </h1>
-            <div className="flex items-center gap-2">
-              <p className="text-slate-500 text-sm">{t.subtitle}</p>
-            </div>
+            <p className="text-slate-500 text-xs whitespace-nowrap">{t.subtitle}</p>
           </div>
         </div>
         
