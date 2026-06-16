@@ -6,6 +6,7 @@ import YouTubeInput from './components/YouTubeInput';
 import FlashcardItem from './components/FlashcardItem';
 import { AppLogo } from './components/AppLogo';
 import AdBanner from './components/AdBanner';
+import FeedbackModal from './components/FeedbackModal';
 import { fetchTranscript, analyzeTranscript } from './services/vocabService';
 import { translations, LocaleType } from './locale';
 import { speakWord } from './utils/speech';
@@ -43,6 +44,7 @@ const App: React.FC = () => {
   });
 
   const [isLoading, setIsLoading] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
   const [currentSetId, setCurrentSetId] = useState<string | null>(null);
   const [activeCards, setActiveCards] = useState<Flashcard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -464,6 +466,11 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-32 px-4 pt-8 md:pt-12 relative animate-in fade-in duration-300">
+      {/* 意見回饋彈窗 */}
+      {showFeedback && session?.user && (
+        <FeedbackModal userId={session.user.id} locale={locale} onClose={() => setShowFeedback(false)} />
+      )}
+
       {/* 設定與數據中心彈窗 */}
       {showConfig && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
@@ -623,6 +630,9 @@ const App: React.FC = () => {
             title={locale === 'zh' ? 'Switch to English' : '切換至繁中'}
           >
             🌐 {locale === 'zh' ? 'English' : '繁中'}
+          </button>
+          <button onClick={() => setShowFeedback(true)} className="px-4 py-2 bg-white text-slate-600 rounded-xl text-sm font-bold shadow-sm border border-slate-200 hover:bg-slate-50 transition-all">
+            💬 {t.feedbackBtn}
           </button>
           <button onClick={() => setShowConfig(true)} className="px-4 py-2 bg-white text-slate-600 rounded-xl text-sm font-bold shadow-sm border border-slate-200 flex items-center gap-2 hover:bg-slate-50 transition-all">
             {t.settings}

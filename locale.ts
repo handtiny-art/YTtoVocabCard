@@ -67,6 +67,15 @@ export const translations = {
     nonEnglishTitle: "僅支援英文影片",
     nonEnglishDetail: "目前僅支援英文影片轉換，請貼上英文授課或英語內容的 YouTube 影片連結喔！",
 
+    // Feedback
+    feedbackBtn: "意見回饋",
+    feedbackTitle: "使用體驗如何？",
+    feedbackSubtitle: "你的回饋對我們非常重要，讓我們把工具做得更好！",
+    feedbackPlaceholder: "有什麼想說的都可以寫（功能建議、遇到的問題...）",
+    feedbackSubmit: "送出回饋",
+    feedbackThanks: "謝謝你的回饋！",
+    feedbackThanksDetail: "你的意見我們都會認真看，謝謝支持！",
+
     // Set Detail
     reviewAll: "全部複習",
     reviewLearning: "複習還在學",
@@ -193,6 +202,15 @@ export const translations = {
     quotaExceededDetail: (resetDate: string) => `You've used all 3 free conversions this week.\nYour quota resets on ${resetDate} (Monday).`,
     nonEnglishTitle: "English Videos Only",
     nonEnglishDetail: "Only English videos are supported at this time. Please paste a YouTube link with English content!",
+
+    // Feedback
+    feedbackBtn: "Feedback",
+    feedbackTitle: "How's your experience?",
+    feedbackSubtitle: "Your feedback helps us improve. We read every message!",
+    feedbackPlaceholder: "Tell us anything — feature ideas, issues you ran into...",
+    feedbackSubmit: "Submit Feedback",
+    feedbackThanks: "Thanks for your feedback!",
+    feedbackThanksDetail: "We read every message and appreciate your support!",
 
     // Set Detail
     reviewAll: "Review All",
