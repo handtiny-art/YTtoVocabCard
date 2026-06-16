@@ -286,6 +286,8 @@ const App: React.FC = () => {
           ? new Date(error.resetDate).toLocaleDateString(locale === 'zh' ? 'zh-TW' : 'en-US', { month: 'long', day: 'numeric' })
           : '';
         showCustomAlert(t.quotaExceededTitle, t.quotaExceededDetail(resetDate), undefined, t.okBtn);
+      } else if (error.message === 'non_english_video') {
+        showCustomAlert(t.nonEnglishTitle, t.nonEnglishDetail, undefined, t.okBtn);
       } else {
         showCustomAlert(t.analyzeFailed, error.message || t.analyzeFailedDetail);
       }

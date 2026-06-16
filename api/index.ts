@@ -86,10 +86,17 @@ async function createServer() {
         throw new Error(`Supadata error: ${errorText}`);
       }
 
-      const transcriptData = await transcriptResponse.json() as { content: { text: string }[] };
-      
+      const transcriptData = await transcriptResponse.json() as { lang?: string; content: { text: string }[] };
+
       if (!transcriptData || !transcriptData.content) {
         throw new Error("無法取得影片逐字稿，請確認影片是否有字幕。");
+      }
+
+      // 只允許英文影片
+      const lang = transcriptData.lang || '';
+      if (lang && !lang.startsWith('en')) {
+        console.log(`[Server] Rejected non-English video: ${videoId} (lang: ${lang})`);
+        return res.status(422).json({ error: 'non_english_video', lang });
       }
 
       const fullText = transcriptData.content.map(item => item.text).join(' ').substring(0, 10000);

@@ -64,6 +64,8 @@ export const translations = {
     okBtn: "好",
     quotaExceededTitle: "本週額度已用完",
     quotaExceededDetail: (_resetDate: string) => `您本週已轉換 3 部影片囉，下週才可以再繼續轉換喔！`,
+    nonEnglishTitle: "僅支援英文影片",
+    nonEnglishDetail: "目前僅支援英文影片轉換，請貼上英文授課或英語內容的 YouTube 影片連結喔！",
 
     // Set Detail
     reviewAll: "全部複習",
@@ -189,6 +191,8 @@ export const translations = {
     okBtn: "OK",
     quotaExceededTitle: "Weekly Limit Reached",
     quotaExceededDetail: (resetDate: string) => `You've used all 3 free conversions this week.\nYour quota resets on ${resetDate} (Monday).`,
+    nonEnglishTitle: "English Videos Only",
+    nonEnglishDetail: "Only English videos are supported at this time. Please paste a YouTube link with English content!",
 
     // Set Detail
     reviewAll: "Review All",
