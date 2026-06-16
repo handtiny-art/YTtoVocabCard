@@ -18,7 +18,6 @@ self.addEventListener('install', (event) => {
       );
     })
   );
-  self.skipWaiting();
 });
 
 // 激活時清理舊版本的快取
