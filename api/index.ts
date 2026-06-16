@@ -137,7 +137,7 @@ async function createServer() {
       return res.status(400).json({ error: "Missing transcript" });
     }
 
-    // 每週額度檢查（快取命中時跳過，因為不消耗 API 費用）
+    // 驗證身份：必須是登入用戶才能呼叫 AI
     const WEEKLY_LIMIT = 3;
     const authHeader = req.headers['authorization'] as string;
     const accessToken = authHeader?.replace('Bearer ', '');
@@ -146,6 +146,10 @@ async function createServer() {
     if (supabaseAdmin && accessToken) {
       const { data: { user } } = await supabaseAdmin.auth.getUser(accessToken);
       userId = user?.id ?? null;
+    }
+
+    if (!userId) {
+      return res.status(401).json({ error: 'unauthorized' });
     }
 
     // 先查共享快取，命中則直接回傳，不消耗 Gemini/OpenAI 額度
