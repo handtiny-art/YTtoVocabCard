@@ -692,10 +692,24 @@ const App: React.FC = () => {
         )}
       </main>
 
-      <footer className="max-w-4xl mx-auto mt-16 pb-10 flex justify-center">
+      <footer className="max-w-4xl mx-auto mt-16 pb-10 flex justify-center items-center gap-3">
         <button onClick={() => setShowFeedback(true)} className="px-5 py-2.5 bg-white text-slate-500 rounded-xl text-sm font-bold shadow-sm border border-slate-200 hover:bg-slate-50 transition-all">
           💬 {t.feedbackBtn}
         </button>
+        <a
+          href="https://handtiny.bobaboba.me"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: '164px', height: '40px', padding: '8px 16px',
+            borderRadius: '12px', backgroundColor: '#A0ADA6', color: '#F8E0BE',
+            border: 'none', textDecoration: 'none', gap: '8px',
+          }}
+        >
+          <img height="24px" src="https://s3.ap-southeast-1.amazonaws.com/media.anyonelab.com/images/boba/boba-embed-icon.png" alt="boba-icon" />
+          <span style={{ flex: 1, textAlign: 'center', fontSize: '14px', fontWeight: 'bold' }}>請我喝珍奶！</span>
+        </a>
       </footer>
 
       {/* 獨立單字卡詳細與編輯彈窗 */}
